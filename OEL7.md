@@ -16,7 +16,7 @@ Oracle Enterprise Linux 7.1 with Docker
 
 ## Basic
 1. Login using demo
-2. sudo apt-get update (multiple times) and reboot
+2. sudo yum update (multiple times) and reboot
 3. sudo systemctl stop firewalld
 4. sudo systemctl disable firewalld
 
