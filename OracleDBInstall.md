@@ -19,6 +19,8 @@ Database control URL: https://<hostname>:1158/em
 
 Database Installation
 --------------------
+In case of OEL, you can use `oracle-rdbms-server-12cR1-preinstall` or `oracle-rdbms-server-11gR2-preinstall` to ensure appropriate prerequisites are met.
+
 1. set the following <br>
 ```mkdir /opt/oracle/tmp```<br>
 ```export TMP=/opt/oracle/tmp```<br>
