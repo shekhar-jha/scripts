@@ -1,5 +1,4 @@
-import java.io.Console;
-import java.net.Socket;
+import java.net.*;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,26 +10,76 @@ public class WebPing implements Runnable {
 	private List<Long> executionValues = new ArrayList<Long>();
 	private List<Long> connectionValues = new ArrayList<Long>();
 	private List<Long> sqlExecutionValues = new ArrayList<Long>();
+	private List<String> serverDetails = new ArrayList<String>();
 
 	public static void main(String[] args) throws Exception {
 		WebPing webPing = new WebPing();
-		Runtime.getRuntime().addShutdownHook(new Thread(webPing));
-		String serverName = args.length < 1 ? "www.google.com" : args[0];
-		int port = args.length < 2 ? 80 : Integer.parseInt(args[1]);
-		String database = args.length < 3 ? null : args[2];
-		String userName = args.length < 4 ? null : args[3];
-		char[] password = null;
-		if (userName != null) {
-			DriverManager.registerDriver((Driver) Class.forName("oracle.jdbc.driver.OracleDriver").newInstance());
-			password = System.console().readPassword("Database Password :");
+		if (args.length ==0)
+		{
+		    System.out.println("Usage: java WebPing [ [ <host name: default: www.google.com> <port: default 80> [<database service name> <user name> [<password>] ] ] | [-checkAccess <host name>:<port>? ] ]");
+		    return;
 		}
-		while (true) {
-			webPing.executeTest(serverName, port);
-			if (userName != null && password != null) {
-				webPing.executeSQLTest("jdbc:oracle:thin:@" + serverName + ":" + port + "/" + database, userName,
-						password);
+		if ("-checkAccess".equalsIgnoreCase(args[0])){
+			for (int counter = 1; counter < args.length; counter++){
+				if (args[counter] == null || "".equals(args[counter]))
+					continue;
+				String[] splittedHostPorts = args[counter].split(":");
+				String hostName = splittedHostPorts[0];
+				if (splittedHostPorts.length == 1) {
+					System.out.println("Please specify the host and port information in <hostname>[:<port>[,<port>]*] format");
+				} else if (splittedHostPorts.length > 2) {
+					System.out.println("Please specify the host and port information in <hostname>[:<port>[,<port>]*] format");
+				} else {
+					String[] hosts = splittedHostPorts[0].split(",");
+					String[] ports = splittedHostPorts[1].split(",");
+					for (String host: hosts) {
+						boolean hostPrinted = false;
+						for (String port : ports) {
+							int portValue = 80;
+							try { 
+								portValue = Integer.parseInt(port);
+							}catch(Exception exception){ System.out.println("Failed to parse port " + port + ". Skipping");continue;}
+							try {
+                                        			Socket sock = new Socket(host, portValue);
+                                        			sock.getOutputStream().write("h".getBytes());
+                                        			sock.getInputStream().available();
+                                        			sock.close();
+                                			}catch (Exception exception) {
+								if (!hostPrinted) {
+									System.out.print(" " + host);
+									 InetAddress addr = InetAddress.getByName(host);
+									 String fqHostName = addr.getHostName();
+									 System.out.print("(" +fqHostName +") : ");
+									hostPrinted=true;
+								}
+                                        			System.out.print(port +", ");
+                                			}
+						}
+						if (hostPrinted)
+							System.out.println("");
+					}
+				}
 			}
-			Thread.sleep(100);
+		
+		} else {
+			Runtime.getRuntime().addShutdownHook(new Thread(webPing));
+			String serverName = args.length < 1 ? "www.google.com" : args[0];
+			int port = args.length < 2 ? 80 : Integer.parseInt(args[1]);
+			String database = args.length < 3 ? null : args[2];
+			String userName = args.length < 4 ? null : args[3];
+			char[] password = null;
+			if (userName != null) {
+				DriverManager.registerDriver((Driver) Class.forName("oracle.jdbc.driver.OracleDriver").newInstance());
+				password = System.console().readPassword("Database Password :");
+			}
+			while (true) {
+				webPing.executeTest(serverName, port);
+				if (userName != null && password != null) {
+					webPing.executeSQLTest("jdbc:oracle:thin:@" + serverName + ":" + port + "/" + database, userName,
+							password);
+				}
+				Thread.sleep(100);
+			}
 		}
 	}
 
