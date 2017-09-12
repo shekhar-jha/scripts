@@ -40,16 +40,19 @@ public class WebPing implements Runnable {
 								portValue = Integer.parseInt(port);
 							}catch(Exception exception){ System.out.println("Failed to parse port " + port + ". Skipping");continue;}
 							try {
-                                        			Socket sock = new Socket(host, portValue);
+                                        			Socket sock = new Socket();
+								sock.connect(new InetSocketAddress(host, portValue), 2000);
                                         			sock.getOutputStream().write("h".getBytes());
                                         			sock.getInputStream().available();
                                         			sock.close();
                                 			}catch (Exception exception) {
 								if (!hostPrinted) {
 									System.out.print(" " + host);
+									try {
 									 InetAddress addr = InetAddress.getByName(host);
 									 String fqHostName = addr.getHostName();
 									 System.out.print("(" +fqHostName +") : ");
+									} catch(Exception exception1){System.out.print("(" + host + ") : ");}
 									hostPrinted=true;
 								}
                                         			System.out.print(port +", ");
