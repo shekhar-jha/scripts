@@ -70,10 +70,14 @@ public class WebServer {
 		}
         Selector selector = Selector.open();
         for (int portValue : applicablePorts) {
-			ServerSocketChannel server = ServerSocketChannel.open();
-			server.configureBlocking(false);
-			server.socket().bind(new InetSocketAddress(listenAddress, portValue));
-			server.register(selector, SelectionKey.OP_ACCEPT);
+			try {
+				ServerSocketChannel server = ServerSocketChannel.open();
+				server.configureBlocking(false);
+				server.socket().bind(new InetSocketAddress(listenAddress, portValue));
+				server.register(selector, SelectionKey.OP_ACCEPT);
+			} catch(SocketException exception) {
+				log("Skipping port " + portValue + " since could not bind to it. Error " + exception);				
+			}
         }
 
         while (true) {
