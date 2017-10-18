@@ -1,31 +1,30 @@
 import time
 sleep=time.sleep
+
+oimEnvironmentIdentifier=eval(sys.argv[1])
+oimDomainName=eval(oimEnvironmentIdentifier + "_DOMAIN_NAME")
+machineHost=eval(oimEnvironmentIdentifier + "_MACHINE_HOST_NAME")
+adminHost=eval(oimEnvironmentIdentifier + "_ADMIN_SERVER")
+localServers=eval(oimEnvironmentIdentifier + "_SERVERS_START").split(",")
+
 print "#####################################"
 print "# Waiting for Admin Server to Start #"
 print "#####################################"
 while True:
-   try: connect(url="t3://localhost:7101",adminServerName="AdminServer"); break
+   try: connect(url="t3://" + adminHost + ":7001",adminServerName="AdminServer"); break
    except: sleep(60)
 
 print "##############################"
 print "# Admin Server has come up #"
 print "##############################"
 
-print "##########################"
-print "# Starting SOA Server 1 #"
-print "##########################"
-
-start(name="WLS_SOA1", block="true")
-print "##########################"
-print "# Starting OIM Server 1 #"
-print "##########################"
-
-start(name="WLS_OIM1", block="true")
-
-print "##################################"
-print "# Starting BI Publisher Server 1 #"
-print "##################################"
-
-start(name="WLS_BIP1", block="true")
+for serverName in localServers:
+    try:
+        print "##########################"
+        print "# Starting " + serverName  +"  #"
+        print "##########################"
+        start(name=serverName, block="true")
+    except:
+        print "Server " + serverName +" startup failed"
 
 exit()
