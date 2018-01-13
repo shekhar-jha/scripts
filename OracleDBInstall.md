@@ -17,6 +17,16 @@ Start/stop
 
 Database control URL: https://<hostname>:1158/em
 
+Notes
+------
+
+Oracle 12.2.0.1 (12.2.0.1.171017)
+
+1. RCU
+    1. **Authentication Level** - DB 12.2 and later version support higher authentication mechanism which is not compatible with RCU's level due to which authentication fails with unsupported authentication protocol. Keeping that in mind need to add `SQLNET.ALLOWED_LOGON_VERSION_SERVER=8` and `SQLNET.ALLOWED_LOGON_VERSION_CLIENT=8` to $ORACLE_HOME//network/admin/sqlnet.ora (create an empty file if not already present) and restart the DB. Also, reset the password for sys & system using `alter user system identified by <password>` to ensure that new authentication protocol is active.
+     2. **MDS Schema creation failure** - DB Security in 12.2 disables some features which triggers error while creating MDS Schema. Execute `ALTER SYSTEM SET "_allow_insert_with_update_check"=TRUE scope=spfile` and restart database.
+
+
 Database Installation
 --------------------
 In case of OEL, you can use `oracle-rdbms-server-12cR1-preinstall` or `oracle-rdbms-server-11gR2-preinstall` to ensure appropriate prerequisites are met.
@@ -60,20 +70,25 @@ Database configuration
 
 1. 1&2 as above
 2. dbca
+2. (Version 12.2) Click on Advanced Configuration
 3. Create a database
 4. General Purpose or Transaction Processing
 5. Global Database Name : OIAM, SID: OIAM
+6. (Version 12.2) Database Identification: Uncheck Container Database
 6. Management:
-a. Enterprise Manager : configure enterprise manager
+a. Enterprise Manager : uncheck enterprise manager
 b. Configure Database control for local management
 c. Automatic maintainance tasks checked
 7. Use same password : demo1234
 8. Storage Type: File, Use Database file location from template
 9. Specify flash recovery checked, default values
+10. (Version 12.2) Select default listener already selected.
+11. (Version 12.2) Configure Data Vault and Oracle Label Security - unchecked.
 10. Nothin on sample schema
 11. Use Automatic Memory management : checked; Memory Size: 3072
 12. Sizing > User Processes : 500
 13. Character sets: AL32UTF8
+13. (Version 12.2) National Character set: UTF8
 14. open_cursors: 800
 15. Create the database
 16. Enable Database in /etc/oratab to allow easy start of server using dbstart tool<br>
