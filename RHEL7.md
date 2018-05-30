@@ -20,6 +20,11 @@ firewall-cmd --zone=public --add-port=80/tcp --permanent
 sed 's/enforcing/disabled/g' -i /etc/sysconfig/selinux
 sed 's/enforcing/disabled/g' -i /etc/selinux/config
 ```
+### Disable Services
+```
+sudo systemctl stop postfix
+sudo systemctl disable postfix
+```
 
 ### Create new user
 
