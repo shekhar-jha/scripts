@@ -16,6 +16,11 @@ wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle
 wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_idmqs_Disk1_2of2.zip" -O fmw_12.2.1.3.0_idmqs_Disk1_2of2.zip
 wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_infrastructure_Disk1_1of1.zip" -O fmw_12.2.1.3.0_infrastructure_Disk1_1of1.zip
 wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_idm_Disk1_1of1.zip" -O fmw_12.2.1.3.0_idm_Disk1_1of1.zip
+
+# SOA
+wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_soaqs_Disk1_1of2.zip" -O fmw_12.2.1.3.0_soaqs_Disk1_1of2.zip
+wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_soaqs_Disk1_2of2.zip" -O fmw_12.2.1.3.0_soaqs_Disk1_2of2.zip
+
 # OUD
 wget --load-cookies=./cookies.txt --no-check-certificate "http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_oud_Disk1_1of1.zip" -O fmw_12.2.1.3.0_oud_Disk1_1of1.zip
 # OAM Webgate Patch (12.2.1.3.180414)
