@@ -26,10 +26,66 @@ Oracle 12.2.0.1 (12.2.0.1.171017)
     1. **Authentication Level** - DB 12.2 and later version support higher authentication mechanism which is not compatible with RCU's level due to which authentication fails with unsupported authentication protocol. Keeping that in mind need to add `SQLNET.ALLOWED_LOGON_VERSION_SERVER=8` and `SQLNET.ALLOWED_LOGON_VERSION_CLIENT=8` to $ORACLE_HOME//network/admin/sqlnet.ora (create an empty file if not already present) and restart the DB. Also, reset the password for sys & system using `alter user system identified by <password>` to ensure that new authentication protocol is active.
      2. **MDS Schema creation failure** - DB Security in 12.2 disables some features which triggers error while creating MDS Schema. Execute `ALTER SYSTEM SET "_allow_insert_with_update_check"=TRUE scope=spfile` and restart database.
 
+Prerequisite
+------------
+
+In case of OEL, you can use `oracle-rdbms-server-12cR1-preinstall` or `oracle-rdbms-server-11gR2-preinstall` to ensure appropriate prerequisites are met.
+
+1. Install pre-requisite software
+```
+yum groupinstall -y "X Window System"
+yum install xclock
+yum install -y zip unzip
+```
+2. Install firefox to download software
+```
+yum install bzip2
+yum install firefox
+yum install wget
+```
+3. Download the database from `http://www.oracle.com/technetwork/database/enterprise-edition/downloads/index.html`
+4. Setup users
+```
+groupadd oinstall
+groupadd dba
+useradd -g oinstall -G dba oracle
+```
+5. Add the following to `/etc/sysctl.conf`
+```
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2097152
+kernel.shmmax = 1987162112
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048586
+```
+6. Apply values
+```
+sysctl -p
+sysctl -a
+```
+7. Add the following to `/etc/security/limits.conf`
+```
+oracle soft nproc 2047
+oracle hard nproc 16384
+oracle soft nofile 1024
+oracle hard nofile 65536
+```
+8. Install required packages
+```
+yum install -y binutils.x86_64 compat-libcap1.x86_64 gcc.x86_64 gcc-c++.x86_64 glibc.i686 glibc.x86_64 \
+glibc-devel.i686 glibc-devel.x86_64 ksh compat-libstdc++-33 libaio.i686 libaio.x86_64 libaio-devel.i686 libaio-devel.x86_64 \
+libgcc.i686 libgcc.x86_64 libstdc++.i686 libstdc++.x86_64 libstdc++-devel.i686 libstdc++-devel.x86_64 libXi.i686 libXi.x86_64 \
+libXtst.i686 libXtst.x86_64 make.x86_64 sysstat.x86_64
+```
 
 Database Installation
 --------------------
-In case of OEL, you can use `oracle-rdbms-server-12cR1-preinstall` or `oracle-rdbms-server-11gR2-preinstall` to ensure appropriate prerequisites are met.
 
 1. set the following <br>
 ```mkdir /opt/oracle/tmp```<br>
