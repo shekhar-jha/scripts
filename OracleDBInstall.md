@@ -152,6 +152,11 @@ c. Automatic maintainance tasks checked
 `OIAM:/opt/oracle/db/product/11.2.0/dbhome_1:Y`
 17. Updated the tmpfs line in /etc/fstab to allow oracle database to start on server<br>
 `tmpfs                   /dev/shm                tmpfs  size=3g        0 0`
+18. Change the default profile to ensure that passwords don't expire
+```
+alter profile DEFAULT limit PASSWORD_LIFE_TIME  unlimited;
+alter profile DEFAULT limit PASSWORD_REUSE_TIME unlimited;
+```
 
 Profile setup
 ------------
