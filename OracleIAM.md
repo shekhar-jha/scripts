@@ -42,8 +42,11 @@ wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle
 # WLS PATCH SET UPDATE 12.2.1.3.180417
 wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle.com/Orion/Services/download/p27342434_122130_Generic.zip?aru=21933966&patch_file=p27342434_122130_Generic.zip" -O p27342434_122130_Generic.zip
 
+# OPatch patch of version 12.2.0.1.13 for Oracle software releases DB 12.2.0.x and DB 18.x (APR 2018) (Patch)
+wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle.com/Orion/Services/download/p6880880_122010_Linux-x86-64.zip?aru=22116395&patch_file=p6880880_122010_Linux-x86-64.zip" -O p6880880_122010_Linux-x86-64.zip
+
 # Oracle Database COMBO OF OJVM RU COMPONENT 12.2.0.1.180417 + DBRU 12.2.0.1.180417
-wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle.com/Orion/Services/download/p27726453_122010_Linux-x86-64.zip?aru=22117468&patch_file=p27726453_122010_Linux-x86-64.zip
+wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle.com/Orion/Services/download/p27726453_122010_Linux-x86-64.zip?aru=22117468&patch_file=p27726453_122010_Linux-x86-64.zip" -O p27726453_122010_Linux-x86-64.zip
 
 # OHS (NATIVE) BUNDLE PATCH 12.2.1.3.171117 (Patch)
 wget --load-cookies=./cookies.txt --no-check-certificate "https://updates.oracle.com/Orion/Services/download/p27149535_122130_Linux-x86-64.zip?aru=21774425&patch_file=p27149535_122130_Linux-x86-64.zip" -O p27149535_122130_Linux-x86-64.zip
