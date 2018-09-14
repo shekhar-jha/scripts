@@ -1,3 +1,61 @@
+# Auto X11 setup on sudo
+
+In case of sudo based access, users have to typically login to maching using their own user id/password and then perform sudo. In this process, the automatically X11 setup performed by ssh gets lost (if -X or X11 forwarding is configured). In such scenario, user has to perform xauth list & echo $DISPLAY after user login and then run xauth add & export DISPLAY with corresponding value after sudo login.
+
+The following scripts, if setup properly, allows user to avoid the cumbersome process.
+> **Note** : This runs generated files from shared directory. Please ensure that you are comfortable with security implications for such setup.
+
+### Login Account setup
+
+Create the following script/alias in the user login that needs to be auto-X11 enabled.
+
+```
+#!/bin/bash
+SVC_USER=svcuser
+
+echo "" > /tmp/runme-${LOGNAME}.sh;
+xauth list | while read xauthAccess; do echo "xauth add ${xauthAccess}" >> /tmp/runme-${LOGNAME}.sh; done
+echo "export DISPLAY=${DISPLAY}" >> /tmp/runme-${LOGNAME}.sh
+chmod o+rwx /tmp/runme-${LOGNAME}.sh
+##### Change the following line to the appropriate method used to login to service account 
+sudo su - ${SVC_USER}
+##### Change completed.
+rm -f /tmp/runme-${LOGNAME}.sh
+```
+
+### Service Account setup
+Service account is account that login user changes to using `sudo su - <service user>` or `su - <service user>`. There are two approaches for identifying the original login user using which we can identify the script created by login.
+
+#### logname
+`logname` command show the login user's name. This script uses the login user name to identify applicable shell script
+
+Add the following to `.bashrc` or `.bash_profile` (or corresponding shell initialization script) of the service account so that it is executed immediately after login.
+
+```
+execFile=""; userRunFile="runme-`logname`.sh"; for file in `ls -rt /tmp/`;do lastFile=$file; done; if [ "${userRunFile}" = "${lastFile}" ]; then execFile="${userRunFile}"; fi
+if [ -f /tmp/$execFile ];
+then
+  echo "Setting up X11...";
+  . /tmp/${execFile};
+fi
+```
+
+#### Last runme-*sh script
+This approach makes the assumption that if you execute script created above, the last file created in /tmp directory will be your runme-${LOGNAME} file. It is a simple hack with obvious downsides but works for basic cases.
+Add the following to `.bashrc` or `.bash_profile` (or corresponding shell initialization script) of the service account so that it is executed immediately after login.
+Please feel free to add additional checks (e.g. adding `-group <group name>` to find command ensure that this script is executed only if runme file is created by users of given group).
+
+```
+# This code finds latest runme file created by somebody in group sina in /tmp directory and runs it.
+# this will ensure that file created by oimsvc command by user id is run automatically on login.
+for file in `ls -rt /tmp/`;do lastFile=$file; done; execFile=''; for runmeFile in `find /tmp -name "runme*sh" -printf "%f\n" 2>/dev/null`; do if [ "${lastFile}" = "${runmeFile}" ]; then execFile="${lastFile}"; fi; done;
+if [ -f /tmp/$execFile ];
+then
+    echo "Setting up X11..."
+    . /tmp/$execFile
+fi
+```
+
 # Rename
 Rename files with particular word with another word.
 e.g. Renaming files with name containing word 'Create' to 'Bulk'
@@ -99,60 +157,3 @@ oim_admin_port=$( readVariable "OIM Admin server port" "7002" "" validateAndConn
 
 ```
 
-# Auto X11 setup on sudo
-
-In case of sudo based access, users have to typically login to maching using their own user id/password and then perform sudo. In this process, the automatically X11 setup performed by ssh gets lost (if -X or X11 forwarding is configured). In such scenario, user has to perform xauth list & echo $DISPLAY after user login and then run xauth add & export DISPLAY with corresponding value after sudo login.
-
-The following scripts, if setup properly, allows user to avoid the cumbersome process.
-> **Note** : This runs generated files from shared directory. Please ensure that you are comfortable with security implications for such setup.
-
-### Login Account setup
-
-Create the following script/alias in the user login that needs to be auto-X11 enabled.
-
-```
-#!/bin/bash
-SVC_USER=svcuser
-
-echo "" > /tmp/runme-${LOGNAME}.sh;
-xauth list | while read xauthAccess; do echo "xauth add ${xauthAccess}" >> /tmp/runme-${LOGNAME}.sh; done
-echo "export DISPLAY=${DISPLAY}" >> /tmp/runme-${LOGNAME}.sh
-chmod o+rwx /tmp/runme-${LOGNAME}.sh
-##### Change the following line to the appropriate method used to login to service account 
-sudo su - ${SVC_USER}
-##### Change completed.
-rm -f /tmp/runme-${LOGNAME}.sh
-```
-
-### Service Account setup
-Service account is account that login user changes to using `sudo su - <service user>` or `su - <service user>`. There are two approaches for identifying the original login user using which we can identify the script created by login.
-
-#### logname
-`logname` command show the login user's name. This script uses the login user name to identify applicable shell script
-
-Add the following to `.bashrc` or `.bash_profile` (or corresponding shell initialization script) of the service account so that it is executed immediately after login.
-
-```
-execFile=""; userRunFile="runme-`logname`.sh"; for file in `ls -rt /tmp/`;do lastFile=$file; done; if [ "${userRunFile}" = "${lastFile}" ]; then execFile="${userRunFile}"; fi
-if [ -f /tmp/$execFile ];
-then
-  echo "Setting up X11...";
-  . /tmp/${execFile};
-fi
-```
-
-#### Last runme-*sh script
-This approach makes the assumption that if you execute script created above, the last file created in /tmp directory will be your runme-${LOGNAME} file. It is a simple hack with obvious downsides but works for basic cases.
-Add the following to `.bashrc` or `.bash_profile` (or corresponding shell initialization script) of the service account so that it is executed immediately after login.
-Please feel free to add additional checks (e.g. adding `-group <group name>` to find command ensure that this script is executed only if runme file is created by users of given group).
-
-```
-# This code finds latest runme file created by somebody in group sina in /tmp directory and runs it.
-# this will ensure that file created by oimsvc command by user id is run automatically on login.
-for file in `ls -rt /tmp/`;do lastFile=$file; done; execFile=''; for runmeFile in `find /tmp -name "runme*sh" -printf "%f\n" 2>/dev/null`; do if [ "${lastFile}" = "${runmeFile}" ]; then execFile="${lastFile}"; fi; done;
-if [ -f /tmp/$execFile ];
-then
-    echo "Setting up X11..."
-    . /tmp/$execFile
-fi
-```
