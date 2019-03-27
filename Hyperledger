@@ -1,0 +1,29 @@
+# Setup
+
+Before you begin install and configure docker
+
+1. Update host ip in /etc/hosts & reboot
+2. Change hostname to hyperledger
+   hostnamectl set-hostname hyperledger
+3. Install bash-completion
+4. Install compose
+   sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+   sudo chmod +x /usr/local/bin/docker-compose
+   sudo curl -L https://raw.githubusercontent.com/docker/compose/1.22.0/contrib/completion/bash/docker-compose -o /etc/bash_completion.d/docker-compose
+5. Install GO
+   yum install golang
+6. Added new user
+   sudo useradd -c "Hyperledger" -m hyperledger
+   sudo usermod -aG docker hyperledger
+7. Install hyperledger
+   sudo mkdir /opt/hyperledger-1.2.0
+   sudo ln -sf hyperledger-1.2.0 hyperledger
+   sudo chown hyperledger:hyperledger hyperledger-1.2.0/
+   curl -sSL http://bit.ly/2ysbOFE | bash -s 1.2.0
+8. Add following line to ~hyperledger/.bash_profile
+   export PATH=/opt/hyperledger/bin:$PATH
+9. Install git
+   yum install git
+   cd /opt/hyperledger-1.2.0/
+   git clone -b master https://github.com/hyperledger/fabric-samples.git && cd fabric-samples && git checkout v1.2.0
+10. Removed and installed local vmware tools
