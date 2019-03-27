@@ -14,5 +14,16 @@ systemctl enable docker
 groupadd docker
 usermod -aG docker <user id>
 ```
+3. Add the ip address to `/etc/hosts`
+```
+<ip address> docker-host
+```
+4. Add the following line to `/etc/docker/daemon.json`
+```
+{
+    "hosts" : [ "unix:///var/run/docker.sock", "tcp://docker-host:2375"]
+}
+```
 
 ### 
+
