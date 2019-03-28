@@ -26,14 +26,31 @@ usermod -aG docker <user id>
 ```
 <ip address> docker-host
 ```
-4. Add the following line to `/etc/docker/daemon.json`
+4. Create the configuration for docker daemon `/etc/docker/daemon.json`
 ```
+mkdir /etc/docker
+cat > /etc/docker/daemon.json <<EOF
 {
-    "hosts" : [ "unix:///var/run/docker.sock", "tcp://docker-host:2375"]
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.override_kernel_check=true"
+  ]
 }
+EOF
+mkdir -p /etc/systemd/system/docker.service.d
 ```
+> **Note:**
+>
+> 1. Adding `"hosts": ["unix:///var/run/docker.sock", "tcp://docker-host:2375"]` should allow connecting remotely. But with current builds it is not working.
+> 2. Using `systemd` as `cgroup` driver is recommended 
 5. Restart
 ```
+systemctl daemon-reload
 systemctl restart docker
 ```
 
@@ -43,30 +60,9 @@ systemctl restart docker
 
 ### Prerequisites
 
-1. Ensure that machine is appropriate name
+1. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public) and the corresponding names are updated 
 ```
-hostnamectl set-hostname k8-master
-```
-2. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public)
-> **Note**
-> Need to understand whether multiple network adapter based management & application traffic separation is necessary.
-3. Ensure that docker is installed (See above for steps) 
-4. Ensure that mac address and product id are unique across the cluster
-```
-ip link
-cat /sys/class/dmi/id/product_uuid
-```
-
-### Install
-
-1. Add the following entry in to `/etc/hosts` for configuration purpose
-```
-<mgmt ip address> k8-master-1 docker-host
-<external ip address> k8-master-1-app
-```
-2. Change the network adapter name to `app` & `mgmt`. Please replace `ens33` with name of corresponding network adapter in the server. Also, replace `<mac>` with corresponding MAC address of adapter.
-```
-sudo su - bash
+sudo su - 
 cd /etc/sysconfig/network-scripts
 cp ifcfg-ens33 ifcfg-app
 cp ifcfg-ens33 ifcfg-mgmt
@@ -79,13 +75,62 @@ echo 'HWADDR="<mac>"' >> ifcfg-app
 echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
 > **Note**
->
+> Need to understand whether multiple network adapter based management & application traffic separation is necessary.
 > 1. May need to revisit whether standardization of network adapter name will simplify any kubernetes configuration across all the nodes.
 > 2. Standard naming of adapter name can be security issue?
 > 3. Some guidance include need to add/update `/usr/lib/udev/rules.d/60-net.rules` file. But it looks like that is not needed for CentOS 7.
-3. Setup firewall
+2. Ensure that docker is installed (See above for steps) 
+3. Ensure that mac address and product id are unique across the cluster
 ```
-sudo su - bash
+ip link
+cat /sys/class/dmi/id/product_uuid
+```
+4. Ensure that sway is disabled by checking the swap line in `/etc/fstab` file
+```
+#/dev/mapper/centos_centos7--base-swap swap                    swap    defaults        0 0
+  
+```
+5. Ensure that machine has atleast 2 cores configured.
+
+### Install
+
+1. Update the hardware address in scripts to ensure network interface names are updated
+```
+sudo su - 
+cd /etc/sysconfig/network-scripts 
+sed -i.backup '/HWADDR/d' ifcfg-app
+sed -i.backup '/HWADDR/d' ifcfg-mgmt
+echo 'HWADDR="<mac>"' >> ifcfg-app
+echo 'HWADDR="<mac>"' >> ifcfg-mgmt
+```
+2. Change the name of the server
+```
+hostnamectl set-hostname k8-master-1
+```
+3. Add the following entry in to `/etc/hosts` for configuration purpose
+```
+<mgmt ip address> k8-master-1 docker-host
+<external ip address> k8-master-1-app
+```
+4. For CentOS/RHEL - Execute the following command to fix traffic routing issue
+```
+modprobe br_netfilter
+cat <<EOF >  /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sysctl --system
+```
+5. Disable SE Linux (Master Only???)
+```
+setenforce 0
+sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
+```
+> **Note**
+> Need to revisit this but looks like this is standard guidance of installation process
+6. Setup firewall
+```
+sudo su - 
 firewall-cmd --permanent --new-service=docker-server
 firewall-cmd --permanent --service=docker-server --set-description="Docker Server API"
 firewall-cmd --permanent --service=docker-server --set-short="docker-server"
@@ -124,14 +169,65 @@ firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=dhcpv6-client
 # To allow ssh access on mgmt interface
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=ssh
 ```
-2. Download Kubernetes server binaries
+7. Create new user `k8admin`
+```
+useradd -c "Kubernates Admin" -m k8admin
+```
+8. Install Kubernetes server binaries
 ```
 sudo su - bash
-cd /opt
-mkdir installers
-cd installers
-curl -OL https://dl.k8s.io/v1.14.0/kubernetes-server-linux-amd64.tar.gz
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kube*
+EOF
+yum install kubeadm --disableexcludes=kubernetes
+systemctl enable --now kubelet
 ```
+9. Cleanup any existing cluster (Optional)
+```
+kubectl drain k8-master-1 --delete-local-data --force --ignore-daemonsets
+kubectl delete node k8-master-1
+kubeadm reset
+iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+```
+10.Initialize cluster on master node
+```
+sudo su -
+kubeadm config images pull
+kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.126.130
+```
+> **Note**
+> ```
+> [WARNING Firewalld]: firewalld is active, please ensure ports [6443 10250] are open or your cluster may not function correctly
+> [kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+> [kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+> [certs] Using certificateDir folder "/etc/kubernetes/pki"
+> [kubeconfig] Using kubeconfig folder "/etc/kubernetes"
+> [control-plane] Using manifest folder "/etc/kubernetes/manifests"
+> [bootstrap-token] Using token: 022uy8.3tb96nyxg7meusae
+> kubeadm join 192.168.51.239:6443 --token 022uy8.3tb96nyxg7meusae \
+>     --discovery-token-ca-cert-hash sha256:0e4787937e0842e90cd8b38d9d8f76d6ddc8e8512bd61b8b6735db77b7898d1b 
+> ```
+4. Enable `k8admin` user to control setup
+```
+sudo su -
+mkdir -p ~k8admin/.kube
+cp -i /etc/kubernetes/admin.conf ~k8admin/.kube/config
+chown $(id -u k8admin):$(id -g k8admin) ~k8admin/.kube/config
+```
+5. Install pod network add-on to build network that will connect all the pods across the cluster
+```
+
+```
+> **Note**
+> There are multiple network add-ons available but this focuses on using calico.
+> 
 
 ## Node
 
@@ -141,24 +237,14 @@ See Master for pre-requisites
 
 ### Install
 
-1. Add the following entry in to `/etc/hosts` for configuration purpose
+1. Change the name of the server
+```
+hostnamectl set-hostname k8-node-1
+```
+2. Add the following entry in to `/etc/hosts` for configuration purpose
 ```
 <mgmt ip address> k8-node-1 docker-host
 <external ip address>  k8-node-1-app
-```
-2. Change the network adapter name to `app` & `mgmt`. Please replace `ens33` with name of corresponding network adapter in the server. Also, replace `<mac>` with corresponding MAC address of adapter.
-```
-sudo su - bash
-cd /etc/sysconfig/network-scripts
-cp ifcfg-ens33 ifcfg-app
-cp ifcfg-ens33 ifcfg-mgmt
-mv ifcfg-ens33 backup.ifcfg-ens33
-sed -i.backup '/UUID/d' ifcfg-app
-sed -i.backup '/UUID/d' ifcfg-mgmt
-sed -i.backup 's/ens33/app/g' ifcfg-app
-sed -i.backup 's/ens33/mgmt/g' ifcfg-mgmt
-echo 'HWADDR="<mac>"' >> ifcfg-app
-echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
 3. Setup firewall
 ```
