@@ -28,7 +28,6 @@ usermod -aG docker <user id>
 ```
 4. Create the configuration for docker daemon `/etc/docker/daemon.json`
 ```
-mkdir /etc/docker
 cat > /etc/docker/daemon.json <<EOF
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
@@ -60,7 +59,7 @@ systemctl restart docker
 
 ### Prerequisites
 
-1. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public) and the corresponding names are updated 
+1. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public) and the corresponding names are updated.
 ```
 sudo su - 
 cd /etc/sysconfig/network-scripts
@@ -109,7 +108,8 @@ hostnamectl set-hostname k8-master-1
 ```
 3. Add the following entry in to `/etc/hosts` for configuration purpose
 ```
-<mgmt ip address> k8-master-1 docker-host
+<mgmt ip address> k8-master-1 
+<mgmt ip address> docker-host
 <external ip address> k8-master-1-app
 ```
 4. For CentOS/RHEL - Execute the following command to fix traffic routing issue
@@ -157,7 +157,6 @@ firewall-cmd --permanent --service=k8s-kube-controller-manager --set-short="kube
 firewall-cmd --permanent --service=k8s-kube-controller-manager --add-port=10252/tcp
 firewall-cmd --reload
 firewall-cmd --permanent --new-zone k8s-mgmt-master
-firewall-cmd --permanent --zone=k8s-mgmt-master --add-interface=mgmt
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-api-server
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-etcd-client-api
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kubelet-api
@@ -168,6 +167,8 @@ firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=docker-server
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=dhcpv6-client
 # To allow ssh access on mgmt interface
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=ssh
+firewall-cmd --reload
+firewall-cmd --permanent --zone=k8s-mgmt-master --add-interface=mgmt
 ```
 7. Create new user `k8admin`
 ```
