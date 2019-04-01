@@ -89,7 +89,7 @@ cat /sys/class/dmi/id/product_uuid
 #/dev/mapper/centos_centos7--base-swap swap                    swap    defaults        0 0
   
 ```
-5. Ensure that machine has atleast 2 cores configured.
+5. Ensure that machine has atleast 2 cores configured and atleast 2 GB RAM.
 
 ### Install
 
@@ -204,6 +204,10 @@ kubeadm config images pull
 kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.126.130
 ```
 > **Note**
+>
+> 1. `apiserver-advertise-address` allows you to bind api server to mgmt interface
+> 2. `pod-network-cidr` is specified since we want to use calico which needs this value to be specified.
+> 3. Output of interest
 > ```
 > [WARNING Firewalld]: firewalld is active, please ensure ports [6443 10250] are open or your cluster may not function correctly
 > [kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
@@ -212,23 +216,76 @@ kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.1
 > [kubeconfig] Using kubeconfig folder "/etc/kubernetes"
 > [control-plane] Using manifest folder "/etc/kubernetes/manifests"
 > [bootstrap-token] Using token: 022uy8.3tb96nyxg7meusae
-> kubeadm join 192.168.51.239:6443 --token 022uy8.3tb96nyxg7meusae \
+> kubeadm join 192.168.126.130:6443 --token 022uy8.3tb96nyxg7meusae \
 >     --discovery-token-ca-cert-hash sha256:0e4787937e0842e90cd8b38d9d8f76d6ddc8e8512bd61b8b6735db77b7898d1b 
 > ```
-4. Enable `k8admin` user to control setup
+11. Enable `k8admin` user to control setup
 ```
 sudo su -
 mkdir -p ~k8admin/.kube
 cp -i /etc/kubernetes/admin.conf ~k8admin/.kube/config
 chown $(id -u k8admin):$(id -g k8admin) ~k8admin/.kube/config
-```
-5. Install pod network add-on to build network that will connect all the pods across the cluster
-```
+mkdir -p ~/.kube
+cp -i /etc/kubernetes/admin.conf ~/.kube/config
+chown $(id -u):$(id -g) ~/.kube/config
 
 ```
+12. Check status of environment
+```
+# sudo su - k8admin
+$ kubectl get nodes
+NAME         STATUS    AGE       VERSION
+k8-master-1   NotReady   master   8m9s   v1.14.0
+$ kubectl  get pods  --all-namespaces
+NAMESPACE     NAME                                  READY   STATUS    RESTARTS   AGE
+kube-system   coredns-fb8b8dccf-jv7nr               0/1     Pending   0          9m11s
+kube-system   coredns-fb8b8dccf-mssff               0/1     Pending   0          9m11s
+kube-system   etcd-k8-master-1                      1/1     Running   0          8m24s
+kube-system   kube-apiserver-k8-master-1            1/1     Running   0          8m4s
+kube-system   kube-controller-manager-k8-master-1   1/1     Running   0          8m10s
+kube-system   kube-proxy-rdmb4                      1/1     Running   0          9m11s
+kube-system   kube-scheduler-k8-master-1            1/1     Running   0          8m21s
+```
+12. Install pod network add-on to build network that will connect all the pods across the cluster
+```
+sudo su - k8admin
+curl -OL https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml
+POD_CIDR="10.10.0.0/16"
+sed -i -e "s?192.168.0.0/16?$POD_CIDR?g" calico.yaml
+kubectl apply -f calico.yaml
+```
 > **Note**
-> There are multiple network add-ons available but this focuses on using calico.
-> 
+>
+> 1. There are multiple network add-ons available but this focuses on using calico.
+> 2. Modify the replica count in the `Deployment` named `calico-typha` to the desired number of replicas.
+> 3. Recommend at least one replica for every 200 nodes and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures.
+13. Install `calicoctl` tool
+```
+sudo su - 
+curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/calicoctl
+mv calicoctl /usr/bin
+chmod +x /usr/bin/calicoctl
+```
+14. Check network status
+```
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get nodes
+```
+15. Install Web UI Dashboard to monitor environment
+```
+sudo su - 
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+```
+16. Run the following command and then change `type: ClusterIP` to `type: NodePort`
+```
+kubectl -n kube-system edit service kubernetes-dashboard
+```
+17. Get the mapped port by running the following command
+```
+kubectl -n kube-system get service kubernetes-dashboard
+```
+> NAME                   TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+> kubernetes-dashboard   NodePort   10.96.185.83   <none>        443:**32479**/TCP   25m
+18. Access the web UI at `https://192.168.51.241:32479`
 
 ## Node
 
@@ -276,4 +333,11 @@ cd /opt
 mkdir installers
 cd installers
 curl -OL https://dl.k8s.io/v1.14.0/kubernetes-node-linux-amd64.tar.gz
+```
+
+## Commands
+
+### See all logs
+```
+for container in `docker ps --format "{{.ID}}"`; do echo "--------------------------------------"; docker ps --filter "id=${container}"; echo "--------------------------------------"; docker logs $container | more; done
 ```
