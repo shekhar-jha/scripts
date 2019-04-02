@@ -1,0 +1,47 @@
+Organizations:
+  
+    - &Acme
+        Name: AcmeMSP
+        ID: AcmeMSP
+        MSPDir: crypto-config/peerOrganizations/acme.example.com/msp
+        AnchorPeers:
+            - Host: peer0.acme.example.com
+              Port: 7051
+
+    - &Contoso
+        Name: ContosoMSP
+        ID: ContosoMSP
+        MSPDir: crypto-config/peerOrganizations/contoso.example.com/msp
+        AnchorPeers:
+            - Host: peer0.contoso.example.com
+              Port: 7051
+
+Capabilities:
+
+    Application: &ApplicationCapabilities
+        V1_2: true
+
+Application: &ApplicationDefaults
+    # Organizations is the list of orgs which are defined as participants on
+    # the application side of the network
+    Organizations:
+
+################################################################################
+#
+#   Profile
+#
+#   - Different configuration profiles may be encoded here to be specified
+#   as parameters to the configtxgen tool
+#
+################################################################################
+Profiles:
+
+    Channel:
+        Consortium: consentmanager
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Acme
+                - *Contoso
+            Capabilities:
+                <<: *ApplicationCapabilities
