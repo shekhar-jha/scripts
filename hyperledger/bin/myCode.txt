@@ -1,0 +1,83 @@
+const x509 = require('x509');
+const ANONYMOUS_ENTITY = 'Anonymous';
+
+function getIdentity(certificate = null, type = 'User') {
+    if (certificate === null)
+        throw new Error('Failed to extract identify from null certificate passed.');
+    try {
+        let certificateObject = x509.parseCert(certificate);
+        if (type === 'User') {
+            return certificateObject.subject.commonName;
+        } else if (type === 'Ver-Key') {
+            return certificateObject.fingerPrint;
+        }
+        else if (type === 'Org') {
+            return certificateObject.issuer.organizationName;
+        }
+    } catch (err) {
+        throw new Error('Failed to parse and extract identity due to error. Error: ' + err);
+    }
+}
+
+async function registerApplication(stub) {
+    console.info('Registering entity...');
+    if (args.length !== 5) {
+        throw new Error('Incorrect number of arguments. Expected DID, Ver-key, role & intro-DID');
+    }
+    let newDID = args[1];
+    let newVerKey = args[2];
+    let newRole = args[3];
+    let referredBy_DID = args[4];
+
+    try {
+        let existingMatchingDID_String = await stub.getState(newDID);
+        if (existingMatchingDID_String != '')
+            throw new Error('DID '  + newDID + ' is already registered');
+        let referredBy_String = await stub.getState(referredBy_DID);
+        if (referredBy_String == '')
+            throw new Error('DID ' + referredBy_DID + ' is not registered.');
+        let referredBy_Object = JSON.parse(referredBy_String);
+        let certFingerprint = getIdentity(stub.getCreator().id_bytes.toString('utf8'), 'Ver-Key');
+
+        if (referredBy_Object.verKey !== getIdentity(stub.getCreator().id_bytes.toString('utf8'), 'Ver-Key')) {
+            throw new Error('Registration request was submitted by a user that did not match the referred DID submitted with request.');
+        }
+        let referredBy_Role = referredBy_Object.role;
+        let applicableReferredBy_DID = '';
+        if (referredBy_Role === 'Steward' || referredBy_Role === 'Trusted Agent') {
+            applicableReferredBy_DID = referredBy_Object.did;
+        } else if (referredBy_Role === 'OnBehalfOf') {
+            let orgReferredBy_DID = referredBy_Object.referredByDID;
+            let orgReferredBy_String = await stub.getState(orgReferredBy_DID);
+            if (orgReferredBy_String === '')
+                throw new Error('Failed to locate Organization associated with referred by user ' + referredBy_DID);
+            let orgReferredBy_Object = JSON.parse(orgReferredBy_String);
+            if (orgReferredBy_Object.role === 'Steward' || orgReferredBy_Object.role === 'Trusted Agent') {
+                applicableReferredBy_DID = orgReferredBy_DID;
+            } else {
+                throw new Error('Referrer DID ' + referredBy_DID + ' does not belong to an Steward or Trusted Agent organization');
+            }
+            let newEntity = {};
+            newEntity.did = newDID;
+            newEntity.verKey = newVerKey;
+            newEntity.role = newRole;
+            newEntity.referredByDID = applicableReferredBy_DID;
+            newEntity.status = 'active';
+            let newEntity_String = JSON.stringify(newEntity);
+            try {
+                await stub.putState(newDID, Buffer.from(newEntity_String));
+                console.info('Saved new identity ' + newDID);
+            } catch (transactionError) {
+                console.info('Failed to save new identity due to error ' + transactionError);
+                throw new Error('Could not save new entity to ledger.');
+            }
+        } else {
+            throw new Error('Registration request can be submitted by user on behalf of organization in Steward or Trusted Role');
+        }
+    } catch (err) {
+        throw new Error('Failed to verify DID of referrer. ' + err);
+    }
+    console.info('Registered entity!');
+}
+
+registerApplication(stub);
