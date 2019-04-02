@@ -91,7 +91,7 @@ cat /sys/class/dmi/id/product_uuid
 ```
 5. Ensure that machine has atleast 2 cores configured and atleast 2 GB RAM.
 
-### Install
+### Setup basic kubernetes
 
 1. Update the hardware address in scripts to ensure network interface names are updated
 ```
@@ -201,6 +201,8 @@ iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 ```
 sudo su -
 kubeadm config images pull
+# Stop firewall to ensure that setup can be completed.
+systemctl stop firewalld
 kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.126.130
 ```
 > **Note**
@@ -228,7 +230,6 @@ chown $(id -u k8admin):$(id -g k8admin) ~k8admin/.kube/config
 mkdir -p ~/.kube
 cp -i /etc/kubernetes/admin.conf ~/.kube/config
 chown $(id -u):$(id -g) ~/.kube/config
-
 ```
 12. Check status of environment
 ```
@@ -246,7 +247,17 @@ kube-system   kube-controller-manager-k8-master-1   1/1     Running   0         
 kube-system   kube-proxy-rdmb4                      1/1     Running   0          9m11s
 kube-system   kube-scheduler-k8-master-1            1/1     Running   0          8m21s
 ```
-12. Install pod network add-on to build network that will connect all the pods across the cluster
+
+### Setup Calico as Network Add On
+
+> **Note** 
+> Before the kubernetes network can configure itself and stabalize, the firewall needs to be switched off.
+> This means that during initial configuration and after the server re-boot, firewalld needs to be shutdown and then restarted after all the pods are in running mode.
+> ```
+> systemctl stop firewalld
+> ```
+
+1. Install pod network add-on to build network that will connect all the pods across the cluster
 ```
 sudo su - k8admin
 curl -OL https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml
@@ -259,33 +270,80 @@ kubectl apply -f calico.yaml
 > 1. There are multiple network add-ons available but this focuses on using calico.
 > 2. Modify the replica count in the `Deployment` named `calico-typha` to the desired number of replicas.
 > 3. Recommend at least one replica for every 200 nodes and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures.
-13. Install `calicoctl` tool
+> 4. Could not make this setup work with firewall enabled. Was getting errors about connecting to API-Server from Calico & DNS pods
+2. Install `calicoctl` tool
 ```
 sudo su - 
 curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/calicoctl
 mv calicoctl /usr/bin
 chmod +x /usr/bin/calicoctl
 ```
-14. Check network status
+3. Check network status
 ```
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get nodes
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpConfiguration
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpPeer
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get felixConfiguration
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get globalNetworkPolicy
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get globalNetworkSet
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get hostEndpoint
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get networkPolicy
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get workloadEndpoint
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get ipPool
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get node
+DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get profile
 ```
-15. Install Web UI Dashboard to monitor environment
+4. After the cluster reaches stable state, start the firewall
+```
+systemctl start firewalld
+```
+
+### Setup Kubernetes Dashboard
+
+1. Create a new `admin-user` to access kubernetes
+   * Create a new file `admin-user.yaml` with following content
+   ```
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kube-system
+   ```
+   * Add it to kubernetes
+   ```
+   kubectl apply -f ./admin-user.yaml
+   ```
+2. Install Web UI Dashboard to monitor environment
 ```
 sudo su - 
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
 ```
-16. Run the following command and then change `type: ClusterIP` to `type: NodePort`
-```
-kubectl -n kube-system edit service kubernetes-dashboard
-```
-17. Get the mapped port by running the following command
-```
-kubectl -n kube-system get service kubernetes-dashboard
-```
-> NAME                   TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
-> kubernetes-dashboard   NodePort   10.96.185.83   <none>        443:**32479**/TCP   25m
-18. Access the web UI at `https://192.168.51.241:32479`
+3. Before accessing the environment, run the following setup
+   * Create a tunnel from your local machine to master node
+   ```
+   ssh -o ServerAliveInterval=60 -L 8001:localhost:8001 -f -l root -N 192.168.126.132
+   ```
+   * Generate login token for the admin-user
+   ```
+   kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep admin-user | awk '{print $1}')
+   ```
+   * Start kubernetes proxy to allow access to API server on localhost
+   ```
+   kubectl proxy
+   ```
+4. Access the web UI at `http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/`
 
 ## Node
 
