@@ -4,7 +4,7 @@
 ### Installing docker
 
 1. Install docker
-```
+```bash
 sudo su - bash
 yum install -y yum-utils \
   device-mapper-persistent-data \
@@ -18,7 +18,7 @@ systemctl start docker
 systemctl enable docker
 ```
 2. Add user to docker id
-```
+```bash
 # groupadd docker
 usermod -aG docker <user id>
 ```
@@ -27,7 +27,7 @@ usermod -aG docker <user id>
 <ip address> docker-host
 ```
 4. Create the configuration for docker daemon `/etc/docker/daemon.json`
-```
+```bash
 cat > /etc/docker/daemon.json <<EOF
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
@@ -48,7 +48,7 @@ mkdir -p /etc/systemd/system/docker.service.d
 > 1. Adding `"hosts": ["unix:///var/run/docker.sock", "tcp://docker-host:2375"]` should allow connecting remotely. But with current builds it is not working.
 > 2. Using `systemd` as `cgroup` driver is recommended 
 5. Restart
-```
+```bash
 systemctl daemon-reload
 systemctl restart docker
 ```
@@ -60,7 +60,7 @@ systemctl restart docker
 ### Prerequisites
 
 1. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public) and the corresponding names are updated.
-```
+```bash
 sudo su - 
 cd /etc/sysconfig/network-scripts
 cp ifcfg-ens33 ifcfg-app
@@ -80,7 +80,7 @@ echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 > 3. Some guidance include need to add/update `/usr/lib/udev/rules.d/60-net.rules` file. But it looks like that is not needed for CentOS 7.
 2. Ensure that docker is installed (See above for steps) 
 3. Ensure that mac address and product id are unique across the cluster
-```
+```bash
 ip link
 cat /sys/class/dmi/id/product_uuid
 ```
@@ -94,7 +94,7 @@ cat /sys/class/dmi/id/product_uuid
 ### Setup basic kubernetes
 
 1. Update the hardware address in scripts to ensure network interface names are updated
-```
+```bash
 sudo su - 
 cd /etc/sysconfig/network-scripts 
 sed -i.backup '/HWADDR/d' ifcfg-app
@@ -103,7 +103,7 @@ echo 'HWADDR="<mac>"' >> ifcfg-app
 echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
 2. Change the name of the server
-```
+```bash
 hostnamectl set-hostname k8-master-1
 ```
 3. Add the following entry in to `/etc/hosts` for configuration purpose
@@ -113,7 +113,7 @@ hostnamectl set-hostname k8-master-1
 <external ip address> k8-master-1-app
 ```
 4. For CentOS/RHEL - Execute the following command to fix traffic routing issue
-```
+```bash
 modprobe br_netfilter
 cat <<EOF >  /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -122,14 +122,14 @@ EOF
 sysctl --system
 ```
 5. Disable SE Linux (Master Only???)
-```
+```bash
 setenforce 0
 sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
 ```
 > **Note**
 > Need to revisit this but looks like this is standard guidance of installation process
 6. Setup firewall
-```
+```bash
 sudo su - 
 firewall-cmd --permanent --new-service=docker-server
 firewall-cmd --permanent --service=docker-server --set-description="Docker Server API"
@@ -171,11 +171,11 @@ firewall-cmd --reload
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-interface=mgmt
 ```
 7. Create new user `k8admin`
-```
+```bash
 useradd -c "Kubernates Admin" -m k8admin
 ```
 8. Install Kubernetes server binaries
-```
+```bash
 sudo su - bash
 cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
@@ -191,14 +191,14 @@ yum install kubeadm --disableexcludes=kubernetes
 systemctl enable --now kubelet
 ```
 9. Cleanup any existing cluster (Optional)
-```
+```bash
 kubectl drain k8-master-1 --delete-local-data --force --ignore-daemonsets
 kubectl delete node k8-master-1
 kubeadm reset
 iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 ```
 10.Initialize cluster on master node
-```
+```bash
 sudo su -
 kubeadm config images pull
 # Stop firewall to ensure that setup can be completed.
@@ -221,8 +221,8 @@ kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.1
 > kubeadm join 192.168.126.130:6443 --token 022uy8.3tb96nyxg7meusae \
 >     --discovery-token-ca-cert-hash sha256:0e4787937e0842e90cd8b38d9d8f76d6ddc8e8512bd61b8b6735db77b7898d1b 
 > ```
-11. Enable `k8admin` user to control setup
-```
+11. Enable `k8admin` & `root` user to control setup
+```bash
 sudo su -
 mkdir -p ~k8admin/.kube
 cp -i /etc/kubernetes/admin.conf ~k8admin/.kube/config
@@ -232,7 +232,7 @@ cp -i /etc/kubernetes/admin.conf ~/.kube/config
 chown $(id -u):$(id -g) ~/.kube/config
 ```
 12. Check status of environment
-```
+```console
 # sudo su - k8admin
 $ kubectl get nodes
 NAME         STATUS    AGE       VERSION
@@ -253,12 +253,12 @@ kube-system   kube-scheduler-k8-master-1            1/1     Running   0         
 > **Note** 
 > Before the kubernetes network can configure itself and stabalize, the firewall needs to be switched off.
 > This means that during initial configuration and after the server re-boot, firewalld needs to be shutdown and then restarted after all the pods are in running mode.
-> ```
+> ```bash
 > systemctl stop firewalld
 > ```
 
 1. Install pod network add-on to build network that will connect all the pods across the cluster
-```
+```bash
 sudo su - k8admin
 curl -OL https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml
 POD_CIDR="10.10.0.0/16"
@@ -272,14 +272,14 @@ kubectl apply -f calico.yaml
 > 3. Recommend at least one replica for every 200 nodes and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures.
 > 4. Could not make this setup work with firewall enabled. Was getting errors about connecting to API-Server from Calico & DNS pods
 2. Install `calicoctl` tool
-```
+```bash
 sudo su - 
 curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/calicoctl
 mv calicoctl /usr/bin
 chmod +x /usr/bin/calicoctl
 ```
 3. Check network status
-```
+```bash
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpConfiguration
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpPeer
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get felixConfiguration
@@ -293,7 +293,7 @@ DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get node
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get profile
 ```
 4. After the cluster reaches stable state, start the firewall
-```
+```bash
 systemctl start firewalld
 ```
 
@@ -301,47 +301,47 @@ systemctl start firewalld
 
 1. Create a new `admin-user` to access kubernetes
    * Create a new file `admin-user.yaml` with following content
-   ```
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: admin-user
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: admin-user
-  namespace: kube-system
-   ```
-   * Add it to kubernetes
-   ```
-   kubectl apply -f ./admin-user.yaml
-   ```
-2. Install Web UI Dashboard to monitor environment
+```yaml
+   apiVersion: v1
+   kind: ServiceAccount
+   metadata:
+     name: admin-user
+     namespace: kube-system
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRoleBinding
+   metadata:
+     name: admin-user
+   roleRef:
+     apiGroup: rbac.authorization.k8s.io
+     kind: ClusterRole
+     name: cluster-admin
+   subjects:
+   - kind: ServiceAccount
+     name: admin-user
+     namespace: kube-system
 ```
+   * Add it to kubernetes
+```
+   kubectl apply -f ./admin-user.yaml
+```
+2. Install Web UI Dashboard to monitor environment
+```bash
 sudo su - 
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
 ```
 3. Before accessing the environment, run the following setup
    * Create a tunnel from your local machine to master node
-   ```
+   ```bash
    ssh -o ServerAliveInterval=60 -L 8001:localhost:8001 -f -l root -N 192.168.126.132
    ```
    * Generate login token for the admin-user
-   ```
+   ```bash
    kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep admin-user | awk '{print $1}')
    ```
    * Start kubernetes proxy to allow access to API server on localhost
-   ```
-   kubectl proxy
+   ```bash
+   kubectl proxy &
    ```
 4. Access the web UI at `http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/`
 
