@@ -1,0 +1,49 @@
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# ---------------------------------------------------------------------------
+# "OrdererOrgs" - Definition of organizations managing orderer nodes
+# ---------------------------------------------------------------------------
+OrdererOrgs:
+  # ---------------------------------------------------------------------------
+  # Orderer
+  # ---------------------------------------------------------------------------
+  - Name: Orderer
+    Domain: example.com
+    Specs:
+      - Hostname: orderer
+
+# ---------------------------------------------------------------------------
+# "PeerOrgs" - Definition of organizations managing peer nodes
+# ---------------------------------------------------------------------------
+PeerOrgs:
+  # ---------------------------------------------------------------------------
+  # Acme
+  # ---------------------------------------------------------------------------
+  - Name: Acme
+    Domain: acme.example.com
+    EnableNodeOUs: true
+    # Specs:
+    #   - Hostname: foo # implicitly "foo.org1.example.com"
+    #     CommonName: foo27.org5.example.com # overrides Hostname-based FQDN set above
+    #   - Hostname: bar
+    #   - Hostname: baz
+    Specs:
+       - Hostname: peer0
+       - Hostname: peer1
+    Users:
+      Count: 5
+  # ---------------------------------------------------------------------------
+  # Contoso
+  # ---------------------------------------------------------------------------
+  - Name: Contoso
+    Domain: contoso.example.com
+    EnableNodeOUs: true
+    Specs:
+       - Hostname: peer0
+       - Hostname: peer1
+    Users:
+      Count: 5
+
