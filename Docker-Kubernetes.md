@@ -43,7 +43,7 @@ cat > /etc/docker/daemon.json <<EOF
 EOF
 mkdir -p /etc/systemd/system/docker.service.d
 ```
-> **Note:**
+> **Note:**  
 >
 > 1. Adding `"hosts": ["unix:///var/run/docker.sock", "tcp://docker-host:2375"]` should allow connecting remotely. But with current builds it is not working.
 > 2. Using `systemd` as `cgroup` driver is recommended 
@@ -71,7 +71,7 @@ sed -i.backup 's/ens33/mgmt/g' ifcfg-mgmt
 echo 'HWADDR="<mac>"' >> ifcfg-app
 echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
-> **Note**
+> **Note**  
 > Need to understand whether multiple network adapter based management & application traffic separation is necessary.
 > 1. May need to revisit whether standardization of network adapter name will simplify any kubernetes configuration across all the nodes.
 > 2. Standard naming of adapter name can be security issue?
@@ -125,7 +125,7 @@ sysctl --system
 setenforce 0
 sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
 ```
-> **Note**
+> **Note**  
 > Need to revisit this but looks like this is standard guidance of installation process
 6. Create new user `k8admin`
 ```bash
@@ -221,7 +221,7 @@ kubeadm config images pull
 systemctl stop firewalld
 kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.126.130
 ```
-> **Note**
+> **Note**  
 >
 > 1. `apiserver-advertise-address` allows you to bind api server to mgmt interface
 > 2. `pod-network-cidr` is specified since we want to use calico which needs this value to be specified.
@@ -266,9 +266,9 @@ kube-system   kube-scheduler-k8-master-1            1/1     Running   0         
 
 ### Setup Calico as Network Add On
 
-> **Note** 
+> **Note**   
 > Before the kubernetes network can configure itself and stabalize, the firewall needs to be switched off.
-> This means that during initial configuration and after the server re-boot, firewalld needs to be shutdown on master and then restarted after all the pods are in running mode.
+> This means that during initial configuration, firewalld needs to be shutdown on master and then restarted after atleast node has been added and working. After the first setup has been completed, there is no need to disable firewall. 
 > ```bash
 > systemctl stop firewalld
 > ```
@@ -281,7 +281,7 @@ POD_CIDR="10.10.0.0/16"
 sed -i -e "s?192.168.0.0/16?$POD_CIDR?g" calico.yaml
 kubectl apply -f calico.yaml
 ```
-> **Note**
+> **Note**  
 >
 > 1. There are multiple network add-ons available but this focuses on using calico.
 > 2. Modify the replica count in the `Deployment` named `calico-typha` to the desired number of replicas.
@@ -315,8 +315,8 @@ systemctl start firewalld
 
 ### Setup Kubernetes Dashboard
 
-> **Note** . 
-> Shutdown firewall during initial setup or after server re-boot to allow dashboard to work correctly.
+> **Note**  
+> Shutdown firewall during initial setup to allow dashboard to work correctly. After initial setup and addition of atleast one node, the infrastructure should work properly on re-boots
 ```bash
 # systemctl stop firewalld
 ```
@@ -420,8 +420,8 @@ firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=ssh
 firewall-cmd --reload
 firewall-cmd --permanent --zone=k8s-mgmt-node --add-interface=mgmt
 ```
-> **Note** . 
-> Additional ports besides as specified in Kubernetes docs have been opened to allow calico operate.
+> **Note**  
+> Additional ports besides as specified in Kubernetes docs have been opened to allow calico to operate.
 2. Join the master node
 ```console
 $ sudo su - bash
