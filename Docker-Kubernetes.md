@@ -55,8 +55,6 @@ systemctl restart docker
 
 # Kubernetes
 
-## Master
-
 ### Prerequisites
 
 1. Ensure that machine has atleast 2 network adapters (preferrably on separate network - management and public) and the corresponding names are updated.
@@ -78,20 +76,19 @@ echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 > 1. May need to revisit whether standardization of network adapter name will simplify any kubernetes configuration across all the nodes.
 > 2. Standard naming of adapter name can be security issue?
 > 3. Some guidance include need to add/update `/usr/lib/udev/rules.d/60-net.rules` file. But it looks like that is not needed for CentOS 7.
-2. Ensure that docker is installed (See above for steps) 
-3. Ensure that mac address and product id are unique across the cluster
+2. Ensure that mac address and product id are unique across the cluster
 ```bash
 ip link
 cat /sys/class/dmi/id/product_uuid
 ```
-4. Ensure that sway is disabled by checking the swap line in `/etc/fstab` file
+3. Ensure that sway is disabled by checking the swap line in `/etc/fstab` file
 ```
 #/dev/mapper/centos_centos7--base-swap swap                    swap    defaults        0 0
   
 ```
-5. Ensure that machine has atleast 2 cores configured and atleast 2 GB RAM.
+4. Ensure that machine has atleast 2 cores configured and atleast 2 GB RAM.
 
-### Setup basic kubernetes
+### Common setup
 
 1. Update the hardware address in scripts to ensure network interface names are updated
 ```bash
@@ -104,13 +101,15 @@ echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
 2. Change the name of the server
 ```bash
-hostnamectl set-hostname k8-master-1
+hostnamectl set-hostname k8-<master|node>-<number e.g. 1>
+reboot
 ```
 3. Add the following entry in to `/etc/hosts` for configuration purpose
 ```
-<mgmt ip address> k8-master-1 
+<master mgmt ip address> k8-master-1 
+<mgmt ip address> k8-<master|node>-1
 <mgmt ip address> docker-host
-<external ip address> k8-master-1-app
+<external ip address> k8-<master|node>-1-app
 ```
 4. For CentOS/RHEL - Execute the following command to fix traffic routing issue
 ```bash
@@ -121,14 +120,40 @@ net.bridge.bridge-nf-call-iptables = 1
 EOF
 sysctl --system
 ```
-5. Disable SE Linux (Master Only???)
+5. Disable SE Linux (Master or Both?)
 ```bash
 setenforce 0
 sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
 ```
 > **Note**
 > Need to revisit this but looks like this is standard guidance of installation process
-6. Setup firewall
+6. Create new user `k8admin`
+```bash
+useradd -c "Kubernates Admin" -m k8admin
+```
+7. Install docker (See above for steps) 
+8. Install Kubernetes server binaries
+```bash
+sudo su - bash
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kube*
+EOF
+yum install kubeadm --disableexcludes=kubernetes
+systemctl enable --now kubelet
+```
+
+## Master
+
+### Setup basic kubernetes
+
+1. Setup firewall
 ```bash
 sudo su - 
 firewall-cmd --permanent --new-service=docker-server
@@ -155,6 +180,14 @@ firewall-cmd --permanent --new-service=k8s-kube-controller-manager
 firewall-cmd --permanent --service=k8s-kube-controller-manager --set-description="kube-controller-manager"
 firewall-cmd --permanent --service=k8s-kube-controller-manager --set-short="kube-controller-manager"
 firewall-cmd --permanent --service=k8s-kube-controller-manager --add-port=10252/tcp
+firewall-cmd --permanent --new-service=k8s-kube-calico-typha
+firewall-cmd --permanent --service=k8s-kube-controller-manager --set-description="Calico typha port"
+firewall-cmd --permanent --service=k8s-kube-controller-manager --set-short="kube-calico-typha"
+firewall-cmd --permanent --service=k8s-kube-controller-manager --add-port=5473/tcp
+firewall-cmd --permanent --new-service=k8s-kube-calico-bird
+firewall-cmd --permanent --service=k8s-kube-calico-bird --set-description="Calico bird port"
+firewall-cmd --permanent --service=k8s-kube-calico-bird --set-short="kube-calico-bird"
+firewall-cmd --permanent --service=k8s-kube-calico-bird --add-port=179/tcp
 firewall-cmd --reload
 firewall-cmd --permanent --new-zone k8s-mgmt-master
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-api-server
@@ -163,6 +196,9 @@ firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kubelet-api
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kube-scheduler
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kube-controller-manager
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=docker-server
+# Calico specific services
+firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kube-calico-typha
+firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=k8s-kube-calico-bird
 # To allow assignment of IP using DHCP to mgmt interface
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=dhcpv6-client
 # To allow ssh access on mgmt interface
@@ -170,34 +206,14 @@ firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=ssh
 firewall-cmd --reload
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-interface=mgmt
 ```
-7. Create new user `k8admin`
-```bash
-useradd -c "Kubernates Admin" -m k8admin
-```
-8. Install Kubernetes server binaries
-```bash
-sudo su - bash
-cat <<EOF > /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-exclude=kube*
-EOF
-yum install kubeadm --disableexcludes=kubernetes
-systemctl enable --now kubelet
-```
-9. Cleanup any existing cluster (Optional)
+2. Cleanup any existing cluster (Optional)
 ```bash
 kubectl drain k8-master-1 --delete-local-data --force --ignore-daemonsets
 kubectl delete node k8-master-1
 kubeadm reset
 iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 ```
-10.Initialize cluster on master node
+3.Initialize cluster on master node
 ```bash
 sudo su -
 kubeadm config images pull
@@ -221,7 +237,7 @@ kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.1
 > kubeadm join 192.168.126.130:6443 --token 022uy8.3tb96nyxg7meusae \
 >     --discovery-token-ca-cert-hash sha256:0e4787937e0842e90cd8b38d9d8f76d6ddc8e8512bd61b8b6735db77b7898d1b 
 > ```
-11. Enable `k8admin` & `root` user to control setup
+4. Enable `k8admin` & `root` user to control setup
 ```bash
 sudo su -
 mkdir -p ~k8admin/.kube
@@ -231,7 +247,7 @@ mkdir -p ~/.kube
 cp -i /etc/kubernetes/admin.conf ~/.kube/config
 chown $(id -u):$(id -g) ~/.kube/config
 ```
-12. Check status of environment
+5. Check status of environment
 ```console
 # sudo su - k8admin
 $ kubectl get nodes
@@ -252,7 +268,7 @@ kube-system   kube-scheduler-k8-master-1            1/1     Running   0         
 
 > **Note** 
 > Before the kubernetes network can configure itself and stabalize, the firewall needs to be switched off.
-> This means that during initial configuration and after the server re-boot, firewalld needs to be shutdown and then restarted after all the pods are in running mode.
+> This means that during initial configuration and after the server re-boot, firewalld needs to be shutdown on master and then restarted after all the pods are in running mode.
 > ```bash
 > systemctl stop firewalld
 > ```
@@ -299,6 +315,12 @@ systemctl start firewalld
 
 ### Setup Kubernetes Dashboard
 
+> **Note** . 
+> Shutdown firewall during initial setup or after server re-boot to allow dashboard to work correctly.
+```bash
+# systemctl stop firewalld
+```
+
 1. Create a new `admin-user` to access kubernetes
    * Create a new file `admin-user.yaml` with following content
 ```yaml
@@ -330,7 +352,23 @@ systemctl start firewalld
 sudo su - 
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
 ```
-3. Before accessing the environment, run the following setup
+3. Wait for the dashboard to be created and started.
+```console
+# kubectl get pods --all-namespaces
+NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
+kube-system   calico-kube-controllers-5cbcccc885-z5gqw   1/1     Running   5          4h21m
+kube-system   calico-node-7x695                          1/1     Running   2          4h21m
+kube-system   calico-typha-6ddbb994-njl2b                1/1     Running   2          4h21m
+kube-system   coredns-fb8b8dccf-5ch87                    1/1     Running   5          4h23m
+kube-system   coredns-fb8b8dccf-f4qks                    1/1     Running   6          4h23m
+kube-system   etcd-k8-master-1                           1/1     Running   2          4h22m
+kube-system   kube-apiserver-k8-master-1                 1/1     Running   2          4h22m
+kube-system   kube-controller-manager-k8-master-1        1/1     Running   8          4h22m
+kube-system   kube-proxy-j4rgg                           1/1     Running   2          48m
+kube-system   kube-scheduler-k8-master-1                 1/1     Running   8          4h22m
+kube-system   kubernetes-dashboard-5f7b999d65-xtlsz      1/1     Running   5          3h59m
+```
+4. Before accessing the environment, run the following setup
    * Create a tunnel from your local machine to master node
    ```bash
    ssh -o ServerAliveInterval=60 -L 8001:localhost:8001 -f -l root -N 192.168.126.132
@@ -343,26 +381,13 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/a
    ```bash
    kubectl proxy &
    ```
-4. Access the web UI at `http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/`
+5. Access the web UI at `http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/`
 
 ## Node
 
-### Pre-requisites
+### Setup
 
-See Master for pre-requisites
-
-### Install
-
-1. Change the name of the server
-```
-hostnamectl set-hostname k8-node-1
-```
-2. Add the following entry in to `/etc/hosts` for configuration purpose
-```
-<mgmt ip address> k8-node-1 docker-host
-<external ip address>  k8-node-1-app
-```
-3. Setup firewall
+1. Setup firewall
 ```
 firewall-cmd --permanent --new-service=k8s-kubelet-api
 firewall-cmd --permanent --service=k8s-kubelet-api --set-description="Kubelet API"
@@ -372,30 +397,62 @@ firewall-cmd --permanent --new-service=k8s-node-services
 firewall-cmd --permanent --service=k8s-node-services --set-description="NodePort Services"
 firewall-cmd --permanent --service=k8s-node-services --set-short="node-services"
 firewall-cmd --permanent --service=k8s-node-services --add-port=30000-32767/tcp
+# Calico specific ports
+firewall-cmd --permanent --new-service=k8s-kube-calico-typha
+firewall-cmd --permanent --service=k8s-kube-calico-typha --set-description="Calico typha port"
+firewall-cmd --permanent --service=k8s-kube-calico-typha --set-short="kube-calico-typha"
+firewall-cmd --permanent --service=k8s-kube-calico-typha --add-port=5473/tcp
+firewall-cmd --permanent --new-service=k8s-kube-calico-bird
+firewall-cmd --permanent --service=k8s-kube-calico-bird --set-description="Calico bird port"
+firewall-cmd --permanent --service=k8s-kube-calico-bird --set-short="kube-calico-bird"
+firewall-cmd --permanent --service=k8s-kube-calico-bird --add-port=179/tcp
 firewall-cmd --reload
 firewall-cmd --permanent --new-zone k8s-mgmt-node
-firewall-cmd --permanent --zone=k8s-mgmt-node --add-interface=mgmt
 firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=k8s-kubelet-api
 firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=k8s-node-services
+# Calico specific services
+firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=k8s-kube-calico-typha
+firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=k8s-kube-calico-bird
 # To allow assignment of IP using DHCP to mgmt interface
 firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=dhcpv6-client
 # To allow ssh access on mgmt interface
 firewall-cmd --permanent --zone=k8s-mgmt-node --add-service=ssh
-
+firewall-cmd --reload
+firewall-cmd --permanent --zone=k8s-mgmt-node --add-interface=mgmt
 ```
+> **Note** . 
+> Additional ports besides as specified in Kubernetes docs have been opened to allow calico operate.
+2. Join the master node
+```console
+$ sudo su - bash
+# kubeadm join 192.168.126.132:6443 --token dh08qo.edr1zzj76opzi2jd \
+>     --discovery-token-ca-cert-hash sha256:be8c73d040d52ee1665b80f248e8da05d3eb7ff80f2fe3972e62dd1009171304
+[preflight] Running pre-flight checks
+[preflight] Reading configuration from the cluster...
+[preflight] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -oyaml'
+[kubelet-start] Downloading configuration for the kubelet from the "kubelet-config-1.14" ConfigMap in the kube-system namespace
+[kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+[kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+[kubelet-start] Activating the kubelet service
+[kubelet-start] Waiting for the kubelet to perform the TLS Bootstrap...
 
-2. Download kubernetes node binaries
-```
-sudo su - bash
-cd /opt
-mkdir installers
-cd installers
-curl -OL https://dl.k8s.io/v1.14.0/kubernetes-node-linux-amd64.tar.gz
+This node has joined the cluster:
+* Certificate signing request was sent to apiserver and a response was received.
+* The Kubelet was informed of the new secure connection details.
+
+Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
 ```
 
 ## Commands
 
 ### See all logs
+
 ```
-for container in `docker ps --format "{{.ID}}"`; do echo "--------------------------------------"; docker ps --filter "id=${container}"; echo "--------------------------------------"; docker logs $container | more; done
+for container in `docker ps -q`; 
+do 
+   echo "--------------------------------------"; 
+   docker ps --filter "id=${container}"; 
+   echo "--------------------------------------"; 
+   docker logs $container | more; 
+done
 ```
