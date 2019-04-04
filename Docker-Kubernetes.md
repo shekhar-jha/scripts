@@ -272,6 +272,29 @@ kube-system   kube-scheduler-k8-master-1            1/1     Running   0         
 > ```bash
 > systemctl stop firewalld
 > ```
+>
+> Calico tries to detect the BGP Peer IP using built-in auto-detection method which can generate incorrect result. If you run in to such an issue, manually configure the node to correct IP address. **Note** this change does not survive node restarts.
+> 
+> 1. Export configuration file
+> ```
+> calicoctl get node k8-master-1 -o yaml > k8-master-1-node.yaml
+> ```
+> 2. Remove all information other than what is present below
+>```
+>apiVersion: projectcalico.org/v3
+>kind: Node
+>metadata:
+>  name: k8-master-1
+>spec:
+>  bgp:
+>    ipv4Address: <changed to correct IP & subnet mask>
+>    ipv4IPIPTunnelAddr: <keep original value>
+>```
+> 3. Import the setting
+>```
+>calicoctl apply -f ./k8-master-1-node.yaml 
+>```
+>4. Check the pod status. It should be Ready.  
 
 1. Install pod network add-on to build network that will connect all the pods across the cluster
 ```bash
@@ -294,7 +317,14 @@ curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/
 mv calicoctl /usr/bin
 chmod +x /usr/bin/calicoctl
 ```
-3. Check network status
+3. Add the following configuration in `~k8admin/.bash_profile` to simplify the calicoctl invocation
+```bash
+DATASTORE_TYPE=kubernetes
+export DATASTORE_TYPE
+KUBECONFIG=~k8admin/.kube/config
+export KUBECONFIG
+```
+4. Check network status
 ```bash
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpConfiguration
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpPeer
@@ -308,7 +338,7 @@ DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get ipPool
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get node
 DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get profile
 ```
-4. After the cluster reaches stable state, start the firewall
+5. After the cluster reaches stable state, start the firewall
 ```bash
 systemctl start firewalld
 ```
