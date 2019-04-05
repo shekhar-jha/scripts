@@ -13,7 +13,6 @@ yum-config-manager \
     --add-repo \
     https://download.docker.com/linux/centos/docker-ce.repo  
 sudo yum install docker-ce docker-ce-cli containerd.io
-# yum install docker
 systemctl start docker
 systemctl enable docker
 ```
@@ -86,6 +85,10 @@ cat /sys/class/dmi/id/product_uuid
 #/dev/mapper/centos_centos7--base-swap swap                    swap    defaults        0 0
   
 ```
+by running the following command
+```
+sed -i '/swap/ s/^/# /' /etc/fstab
+```
 4. Ensure that machine has atleast 2 cores configured and atleast 2 GB RAM.
 
 ### Common setup
@@ -99,6 +102,22 @@ sed -i.backup '/HWADDR/d' ifcfg-mgmt
 echo 'HWADDR="<mac>"' >> ifcfg-app
 echo 'HWADDR="<mac>"' >> ifcfg-mgmt
 ```
+Alternate script that can be created and available in base image to update the addresses.
+```
+sudo su - 
+export LINK_1=enp0s3
+export LINK_2=enp0s8
+cd /etc/sysconfig/network-scripts
+sed -i.backup '/HWADDR/d' ifcfg-app
+sed -i.backup '/HWADDR/d' ifcfg-mgmt
+export MAC_1=`ip link show ${LINK_1} | grep 'link/ether' | cut -f 6 -d ' '`
+export MAC_2=`ip link show ${LINK_2} | grep 'link/ether' | cut -f 6 -d ' '`
+echo "HWADDR=${MAC_1}" >> ifcfg-app
+echo "HWADDR=${MAC_2}" >> ifcfg-mgmt
+```
+> **Note**  
+> 1. Created for CentOS 7.
+> 2. Replace `enp0s3` and `enp0s8` with appropriate name given by BIOS/Kernel.
 2. Change the name of the server
 ```bash
 hostnamectl set-hostname k8-<master|node>-<number e.g. 1>
@@ -127,12 +146,8 @@ sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig
 ```
 > **Note**  
 > Need to revisit this but looks like this is standard guidance of installation process
-6. Create new user `k8admin`
-```bash
-useradd -c "Kubernates Admin" -m k8admin
-```
-7. Install docker (See above for steps) 
-8. Install Kubernetes server binaries
+6. Install docker (See above for steps) 
+7. Install Kubernetes server binaries
 ```bash
 sudo su - bash
 cat <<EOF > /etc/yum.repos.d/kubernetes.repo
@@ -153,7 +168,12 @@ systemctl enable --now kubelet
 
 ### Setup basic kubernetes
 
-1. Setup firewall
+1. Create new user `k8admin`
+```bash
+useradd -c "Kubernates Admin" -m k8admin
+usermod -aG docker k8admin
+```
+2. Setup firewall
 ```bash
 sudo su - 
 firewall-cmd --permanent --new-service=docker-server
@@ -206,19 +226,17 @@ firewall-cmd --permanent --zone=k8s-mgmt-master --add-service=ssh
 firewall-cmd --reload
 firewall-cmd --permanent --zone=k8s-mgmt-master --add-interface=mgmt
 ```
-2. Cleanup any existing cluster (Optional)
+3. Cleanup any existing cluster (Optional)
 ```bash
 kubectl drain k8-master-1 --delete-local-data --force --ignore-daemonsets
 kubectl delete node k8-master-1
 kubeadm reset
 iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
 ```
-3.Initialize cluster on master node
+4. Initialize cluster on master node
 ```bash
 sudo su -
 kubeadm config images pull
-# Stop firewall to ensure that setup can be completed.
-systemctl stop firewalld
 kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.126.130
 ```
 > **Note**  
@@ -237,17 +255,17 @@ kubeadm init --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.1
 > kubeadm join 192.168.126.130:6443 --token 022uy8.3tb96nyxg7meusae \
 >     --discovery-token-ca-cert-hash sha256:0e4787937e0842e90cd8b38d9d8f76d6ddc8e8512bd61b8b6735db77b7898d1b 
 > ```
-4. Enable `k8admin` & `root` user to control setup
+5. Enable `k8admin` user to control setup
 ```bash
 sudo su -
 mkdir -p ~k8admin/.kube
 cp -i /etc/kubernetes/admin.conf ~k8admin/.kube/config
 chown $(id -u k8admin):$(id -g k8admin) ~k8admin/.kube/config
-mkdir -p ~/.kube
-cp -i /etc/kubernetes/admin.conf ~/.kube/config
-chown $(id -u):$(id -g) ~/.kube/config
+# mkdir -p ~/.kube
+# cp -i /etc/kubernetes/admin.conf ~/.kube/config
+# chown $(id -u):$(id -g) ~/.kube/config
 ```
-5. Check status of environment
+6. Check status of environment
 ```console
 # sudo su - k8admin
 $ kubectl get nodes
@@ -266,57 +284,77 @@ kube-system   kube-scheduler-k8-master-1            1/1     Running   0         
 
 ### Setup Calico as Network Add On
 
-> **Note**   
-> Before the kubernetes network can configure itself and stabalize, the firewall needs to be switched off.
-> This means that during initial configuration, firewalld needs to be shutdown on master and then restarted after atleast node has been added and working. After the first setup has been completed, there is no need to disable firewall. 
-> ```bash
-> systemctl stop firewalld
-> ```
->
-> Calico tries to detect the BGP Peer IP using built-in auto-detection method which can generate incorrect result. If you run in to such an issue, manually configure the node to correct IP address. **Note** this change does not survive node restarts.
-> 
-> 1. Export configuration file
-> ```
-> calicoctl get node k8-master-1 -o yaml > k8-master-1-node.yaml
-> ```
-> 2. Remove all information other than what is present below
->```
->apiVersion: projectcalico.org/v3
->kind: Node
->metadata:
->  name: k8-master-1
->spec:
->  bgp:
->    ipv4Address: <changed to correct IP & subnet mask>
->    ipv4IPIPTunnelAddr: <keep original value>
->```
-> 3. Import the setting
->```
->calicoctl apply -f ./k8-master-1-node.yaml 
->```
->4. Check the pod status. It should be Ready.  
+Please note kubernetes supports multiple network add-ons but we are going to use calico.
+
+**Note**
+Before the kubernetes network can configure itself and stabalize, the firewall needs to be shutdown off on master. This allows pods on the master to connect with each other till calico-typa comes online on another node (it can not start on master since master is tainted). 
+
+Going forward, if calico-typa is not available, master node will not be able to operate with firewall enabled.
+
+In case server will be restarted before first node is joined, disable the firewall.
+```
+ sudo su - 
+ systemctl disable firewalld
+```
+
+Calico tries to detect the BGP Peer IP using built-in auto-detection method which can generate incorrect result if the configurations are incorrect or if machine has multiple network adapters. If you run in to such an issue, manually configure the node to correct IP address. **Note** this change does not survive node restarts.
+ 
+1. Export configuration file
+```
+ calicoctl get node k8-master-1 -o yaml > k8-master-1-node.yaml
+```
+2. Remove all information other than what is present below
+```yaml
+apiVersion: projectcalico.org/v3
+kind: Node
+metadata:
+  name: k8-master-1
+spec:
+  bgp:
+    ipv4Address: <changed to correct IP & subnet mask>
+    ipv4IPIPTunnelAddr: <keep original value>
+```
+3. Import the setting
+```
+calicoctl apply -f ./k8-master-1-node.yaml 
+```
+4. Check the pod status. It should be Ready.  
+
+#### Installation
 
 1. Install pod network add-on to build network that will connect all the pods across the cluster
-```bash
-sudo su - k8admin
-curl -OL https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml
-POD_CIDR="10.10.0.0/16"
-sed -i -e "s?192.168.0.0/16?$POD_CIDR?g" calico.yaml
-kubectl apply -f calico.yaml
+```console
+$ sudo su -
+# systemctl stop firewalld
+# sudo su - k8admin
+$ curl -OL https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml
+$ POD_CIDR="10.10.0.0/16"
+$ sed -i -e "s?192.168.0.0/16?$POD_CIDR?g" calico.yaml
+$ sed -i -e '/autodetect/a \            - name: IP_AUTODETECTION_METHOD\n              value: "interface=mgmt"' calico.yaml
+$ kubectl apply -f calico.yaml
 ```
 > **Note**  
 >
-> 1. There are multiple network add-ons available but this focuses on using calico.
-> 2. Modify the replica count in the `Deployment` named `calico-typha` to the desired number of replicas.
-> 3. Recommend at least one replica for every 200 nodes and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures.
-> 4. Could not make this setup work with firewall enabled. Was getting errors about connecting to API-Server from Calico & DNS pods
-2. Install `calicoctl` tool
-```bash
-sudo su - 
-curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/calicoctl
-mv calicoctl /usr/bin
-chmod +x /usr/bin/calicoctl
+> 1. Modify the replica count in the `Deployment` named `calico-typha` to the desired number of replicas.
+> 2. Recommend at least one replica for every 200 nodes and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures.
+2. Check node status
+```console
+$ kubectl  get pods  --all-namespaces
+NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
+kube-system   calico-kube-controllers-5cbcccc885-4jtkv   1/1     Running   0          2m23s
+kube-system   calico-node-vr5pt                          0/1     Running   0          2m23s
+kube-system   calico-typha-6ddbb994-xxgl4                0/1     Pending   0          2m24s
+kube-system   coredns-fb8b8dccf-96dwn                    1/1     Running   0          141m
+kube-system   coredns-fb8b8dccf-hrzjz                    1/1     Running   0          141m
+kube-system   etcd-k8-master-1                           1/1     Running   1          140m
+kube-system   kube-apiserver-k8-master-1                 1/1     Running   1          140m
+kube-system   kube-controller-manager-k8-master-1        1/1     Running   1          140m
+kube-system   kube-proxy-mrngl                           1/1     Running   1          141m
+kube-system   kube-scheduler-k8-master-1                 1/1     Running   1          140m
 ```
+> **Note**
+> `calico-node` will transition to ready state only after `typha` is available
+>
 3. Add the following configuration in `~k8admin/.bash_profile` to simplify the calicoctl invocation
 ```bash
 DATASTORE_TYPE=kubernetes
@@ -324,79 +362,92 @@ export DATASTORE_TYPE
 KUBECONFIG=~k8admin/.kube/config
 export KUBECONFIG
 ```
-4. Check network status
+4. Install `calicoctl` tool
 ```bash
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpConfiguration
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get bgpPeer
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get felixConfiguration
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get globalNetworkPolicy
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get globalNetworkSet
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get hostEndpoint
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get networkPolicy
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get workloadEndpoint
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get ipPool
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get node
-DATASTORE_TYPE=kubernetes KUBECONFIG=~k8admin/.kube/config calicoctl get profile
+sudo su - 
+curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.6.1/calicoctl
+mv calicoctl /usr/bin
+chmod +x /usr/bin/calicoctl
 ```
-5. After the cluster reaches stable state, start the firewall
+5. Check network status
 ```bash
-systemctl start firewalld
+sudo su - k8admin
+calicoctl get bgpConfiguration
+calicoctl get bgpPeer
+calicoctl get felixConfiguration
+calicoctl get globalNetworkPolicy
+calicoctl get globalNetworkSet
+calicoctl get hostEndpoint
+calicoctl get networkPolicy
+calicoctl get workloadEndpoint
+calicoctl get profile
+calicoctl get ipPool -o yaml
+calicoctl get node -o yaml
 ```
 
 ### Setup Kubernetes Dashboard
 
 > **Note**  
-> Shutdown firewall during initial setup to allow dashboard to work correctly. After initial setup and addition of atleast one node, the infrastructure should work properly on re-boots
-```bash
-# systemctl stop firewalld
-```
+> 
+> If the dashboard is being installed before calico typha is online, ensure that firewalld is shutdown and disabled. Without the
 
 1. Create a new `admin-user` to access kubernetes
    * Create a new file `admin-user.yaml` with following content
 ```yaml
-   apiVersion: v1
-   kind: ServiceAccount
-   metadata:
-     name: admin-user
-     namespace: kube-system
-   ---
-   apiVersion: rbac.authorization.k8s.io/v1
-   kind: ClusterRoleBinding
-   metadata:
-     name: admin-user
-   roleRef:
-     apiGroup: rbac.authorization.k8s.io
-     kind: ClusterRole
-     name: cluster-admin
-   subjects:
-   - kind: ServiceAccount
-     name: admin-user
-     namespace: kube-system
+apiVersion: v1 
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kube-system
 ```
    * Add it to kubernetes
-```
-   kubectl apply -f ./admin-user.yaml
+```console
+$ kubectl apply -f ./admin-user.yaml
+serviceaccount/admin-user created
+clusterrolebinding.rbac.authorization.k8s.io/admin-user created
 ```
 2. Install Web UI Dashboard to monitor environment
-```bash
-sudo su - 
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+```console
+$ sudo su - k8admin
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+secret/kubernetes-dashboard-certs created
+secret/kubernetes-dashboard-csrf created
+serviceaccount/kubernetes-dashboard created
+role.rbac.authorization.k8s.io/kubernetes-dashboard-minimal created
+rolebinding.rbac.authorization.k8s.io/kubernetes-dashboard-minimal created
+deployment.apps/kubernetes-dashboard created
+service/kubernetes-dashboard created
 ```
 3. Wait for the dashboard to be created and started.
 ```console
-# kubectl get pods --all-namespaces
+$ watch kubectl get pods --all-namespaces
 NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
-kube-system   calico-kube-controllers-5cbcccc885-z5gqw   1/1     Running   5          4h21m
-kube-system   calico-node-7x695                          1/1     Running   2          4h21m
-kube-system   calico-typha-6ddbb994-njl2b                1/1     Running   2          4h21m
-kube-system   coredns-fb8b8dccf-5ch87                    1/1     Running   5          4h23m
-kube-system   coredns-fb8b8dccf-f4qks                    1/1     Running   6          4h23m
-kube-system   etcd-k8-master-1                           1/1     Running   2          4h22m
-kube-system   kube-apiserver-k8-master-1                 1/1     Running   2          4h22m
-kube-system   kube-controller-manager-k8-master-1        1/1     Running   8          4h22m
-kube-system   kube-proxy-j4rgg                           1/1     Running   2          48m
-kube-system   kube-scheduler-k8-master-1                 1/1     Running   8          4h22m
-kube-system   kubernetes-dashboard-5f7b999d65-xtlsz      1/1     Running   5          3h59m
+kube-system   calico-kube-controllers-5cbcccc885-bpdv8   1/1     Running   3          45m
+kube-system   calico-node-cdcdd                          1/1     Running   3          45m
+kube-system   calico-node-vz578                          1/1     Running   2          17m
+kube-system   calico-typha-6ddbb994-hjt85                1/1     Running   2          45m
+kube-system   coredns-fb8b8dccf-96dwn                    1/1     Running   5          3h43m
+kube-system   coredns-fb8b8dccf-hrzjz                    1/1     Running   5          3h43m
+kube-system   etcd-k8-master-1                           1/1     Running   4          3h42m
+kube-system   kube-apiserver-k8-master-1                 1/1     Running   6          3h42m
+kube-system   kube-controller-manager-k8-master-1        1/1     Running   4          3h42m
+kube-system   kube-proxy-mrngl                           1/1     Running   4          3h43m
+kube-system   kube-proxy-wvtzp                           1/1     Running   2          17m
+kube-system   kube-scheduler-k8-master-1                 1/1     Running   4          3h42m
+kube-system   kubernetes-dashboard-5f7b999d65-fgzfr	 1/1     Running   0          55s
 ```
 4. Before accessing the environment, run the following setup
    * Create a tunnel from your local machine to master node
