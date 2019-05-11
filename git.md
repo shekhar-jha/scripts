@@ -34,4 +34,24 @@ git config --global http.sslBackend schannel
 
 ## Mac
 
-git on Mac supports certificate files for authentication. But there is no official support for keychain. In worst case scenario, you can use a specific version of git (from brew) that integrates with 
+git on Mac supports certificate files for authentication. But there is no official support for keychain. In worst case scenario, you can use a specific version of git (from brew) that integrates with curl that can integrate with Keychain and use the certificate stored in keychain.
+
+### Setup
+
+1. Install curl
+```console
+$ brew install curl
+```
+2. Install git
+```console
+$ brew install --with-curl https://raw.githubusercontent.com/Homebrew/homebrew-core/a86ae8fc2b24001b3c6460a46dbfc6e323d2a4d1/Formula/git.rb
+```
+3. Check installed git
+```console
+$ /usr/local/bin/git --version
+```
+4. Check keychain for any website specific Internet password already stored (for example if git location is https://example.com/project1/project1.git, the keychain may have an internet password stored against https://example.com). If so, delete the same otherwise the tool is going to use that without prompting for new password.
+5. Execute the command as follows to clone the repository. In case there is no existing password in the keychain, the system will prompt user for user id & password and then complete the execution.
+```console
+$ /usr/local/bin/git clone https://example.com/project1/project1.git
+```
