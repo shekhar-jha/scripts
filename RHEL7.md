@@ -147,4 +147,8 @@ Update the install
 yum update
 ```
 
-
+# DHCP Configuration
+Override DNS Configuration provided as part of DHCP. Add the following entry to `/etc/dhcp/dhclient.conf` file
+```
+supersede domain-name-servers 8.8.8.8;
+```
