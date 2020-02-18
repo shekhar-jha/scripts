@@ -35,6 +35,83 @@ cd $processHostName
 openssl genrsa -out ./$processHostName.key 2048
 openssl req -new -key ./$processHostName.key -out ./$processHostName.csr -subj "/C=IN/ST=MH/L=WHATEVER/O=ACMEINC/CN=$1"
 ```
+## Generate and sign certificates
+
+### Create CA
+```
+OPENSSL_CMD="/usr/local/Cellar/openssl/1.0.2t/bin/openssl"
+mkdir -p ca
+openssl genrsa -out ca/ca.key 2048
+$OPENSSL_CMD req -new -x509 -key ca/ca.key -sha256 -days 328500 -out ca/ca.crt -config ./certs-v3-ca.conf
+```
+
+### Create Cert
+```
+#!/bin/bash
+
+usage () {
+  echo $0' <directory name> <domain name> [<domain name>]*'
+  exit 1
+}
+
+if [[ "$1" == "" ]]; then
+  echo "Please provide certificate directory";
+  usage
+fi
+if [[ ! -d "$1" ]]; then
+  echo "Please provide valid certificate directory";
+  usage
+fi
+if [[ ! -d "$1/items" ]]; then
+  mkdir "$1/items"
+fi
+if [[ "$2" == "" ]]; then
+  echo "Please provide the name of server for which certificate needs to be generated";
+  usage
+fi
+CERT_DIR=$1
+DOMAIN_NAME=$2
+SAN="DNS.1 = $2"
+COUNTER=2
+for sanName in "${@:3}"
+do
+   SAN="$SAN"$'\n'"DNS.$COUNTER = $sanName"
+   let COUNTER=COUNTER+1
+done
+echo "SAN List: $SAN"
+
+OPENSSL_CMD="/mingw64/bin/openssl"
+
+    $OPENSSL_CMD genrsa -out $CERT_DIR/items/$DOMAIN_NAME.key 2048;
+    cp ./certs-v3.conf ./certs-v3.conf.temp
+    echo "$SAN" >> ./certs-v3.conf.temp
+
+    $OPENSSL_CMD req -new -key $CERT_DIR/items/$DOMAIN_NAME.key -out $CERT_DIR/items/$DOMAIN_NAME.csr \
+        -subj "//C=US\ST=MH\L=WHATEVER\O=ACMEINC\OU=IT\CN=$DOMAIN_NAME" \
+        -reqexts v3_req \
+        -extensions v3_req -config ./certs-v3.conf.temp
+
+    $OPENSSL_CMD x509 -req -in $CERT_DIR/items/$DOMAIN_NAME.csr -CA ./ca/ca.crt -CAkey ./ca/ca.key -CAcreateserial -out $CERT_DIR/items/$DOMAIN_NAME.crt -days 328499 -sha256 -extensions v3_req -extfile ./certs-v3.conf.temp;
+    rm ./certs-v3.conf.temp
+    $OPENSSL_CMD pkcs12 -export -out $CERT_DIR/$DOMAIN_NAME.pfx -inkey $CERT_DIR/items/$DOMAIN_NAME.key -in $CERT_DIR/items/$DOMAIN_NAME.crt -certfile ./ca/ca.crt;
+```
+#### certs-v3.conf
+The file should contain the following 
+```
+[ v3_req ] # this section should contain the following
+# Extensions to add to a certificate request
+
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+....
+
+[alt_names]
+# This should be last line in file
+
+```
 
 ## Create PKCS12 file and JKS File
 
