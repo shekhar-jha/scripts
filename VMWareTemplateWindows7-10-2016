@@ -1,0 +1,57 @@
+
+1. Disable Serial, Parallel Ports and Floppy controller in Bios
+2. Install/Update VMWare Tools
+3. License
+4. Set Administrator Password
+5. Date/Time Zone
+6. Patch
+7. Turn off system restore
+8. Enable Remote access
+9. System Settings -> Performance Best performance.
+10 Startup and recovery-> Display list for 5 seconds
+11. Power options-> Balanced -> Never
+12. Personalization -> Turn off sound
+13. Screen saver -> None
+14. Taskbar -> Start Menu -> Power button -> Logoff
+15. Enable Telent Client and disable other items in features : Media features, Print and Document Services, tablet pc components, XPS Services
+16. Internet Explorer : About:blank
+17. Disable Windows service : Windows Search 
+18. System icon Volume, Action Center turn off
+19. Always show all icons & notification in task bar
+20. Depends on OS: Start menu -> Number of recent programs : 0 , in jump list: 0 , help uncheck. highlight newly installed program uncheck, use large icon: uncheck, documents,music, Pictures, personal folders, don't display; 
+    display run ;     System admin tools: All prog & start menu; uncheck store & display recently opened programs & items.
+21. taskbar buttons: Combine when taskbar is full.
+22. Folder & Search options: always show icons never thumbnails, always show menus, fulll path, show hidden files, uncheck hide, >apply to all folders
+23. Control panel - small icons
+24. Control Panel > Sync Center > Manage offline files->General (Tab) > Disable offline files
+25. Install/Update
+    a. Notepad++
+    b. Chrome/Edge
+    c. bginfo --> Copy shortcut with following command to 
+	    bginfo <file> /timer:0
+
+26. Copy the default profile by rebooting in safemode, login as third user, renaming "Default" folder and copying users directory to Default folder
+27. Enable Administrator user id if disabled.
+28. Needed if using old image: Fix Rearm issue on previous files: https://www.wintips.org/fix-sysprep-fatal-error-dwret-31-machine-invalid-state-couldnt-update-recorded-state/
+    a. HKEY_LOCAL_MACHINE\System\Setup\Status\Sysprep Status - CleanupState 2, GeneralizationState 7
+    b. HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsNT\CurrentVersion\SoftwareProtectionPlatform --> SkipRearm 1
+    c. admin cmd --> msdtc -uninstall; reboot; msdtc -install; reboot
+29. Delete C:\Windows\System32\Sysprep\Panther
+30 Cleanup C:\Windows\Temp\vmware-* (some files may fail);  C:\Windows\Temp\vmware-imc\*
+31. Disable Hibernation(run cmd as administrator)
+    powercfg.exe –h off
+    bcdedit /timeout 5
+32. cleanmgr.exe,
+33. wevtutil el | Foreach-Object {wevtutil cl "$_"}
+34. Control Panel->System->Advanced System Properties->performance->Advance->Virtual Memory->Change
+    Uncheck “Automatically manage paging file size for all drives”
+    Select “No paging file”
+    Click “Set” to disable swap file
+35. dfrgui.exe (only available on windows 7 and Thick provisioned drives)
+36. Ensure that VM file size is packed
+    a. Run sdelete -z C: on windows
+    b. run cat /dev/zero > /big_zero ; sync; rm /big_zero
+    c. shutdown the machine
+    d. login to ESX server and run the command to thin and reduce size of the file.
+       vmkfstools -K <file name>.vmdk
+37. Start machine Enable paging files and shutdown
