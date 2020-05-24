@@ -15,7 +15,13 @@
 14. Taskbar -> Start Menu -> Power button -> Logoff
 15. Enable Telent Client and disable other items in features : Media features, Print and Document Services, tablet pc components, XPS Services
 16. Internet Explorer : About:blank
-17. Disable Windows service : Windows Search 
+17. Disable Windows service : Windows Search; change registry in windows 10 to disable cloud search: 
+    Windows Registry Editor Version 5.00
+    [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Search]
+    "BingSearchEnabled"=dword:00000000
+    "AllowSearchToUseLocation"=dword:00000000
+    "CortanaConsent"=dword:00000000
+    https://www.neowin.net/news/the-windows-10-spring-update-no-longer-lets-you-disable-web-search-in-start
 18. System icon Volume, Action Center turn off
 19. Always show all icons & notification in task bar
 20. Depends on OS: Start menu -> Number of recent programs : 0 , in jump list: 0 , help uncheck. highlight newly installed program uncheck, use large icon: uncheck, documents,music, Pictures, personal folders, don't display; 
@@ -29,8 +35,10 @@
     b. Chrome/Edge
     c. bginfo --> Copy shortcut with following command to 
 	    bginfo <file> /timer:0
-
+    d. Uninstall onedrive
+    
 26. Copy the default profile by rebooting in safemode, login as third user, renaming "Default" folder and copying users directory to Default folder
+    delete third user after setup.
 27. Enable Administrator user id if disabled.
 28. Needed if using old image: Fix Rearm issue on previous files: https://www.wintips.org/fix-sysprep-fatal-error-dwret-31-machine-invalid-state-couldnt-update-recorded-state/
     a. HKEY_LOCAL_MACHINE\System\Setup\Status\Sysprep Status - CleanupState 2, GeneralizationState 7
