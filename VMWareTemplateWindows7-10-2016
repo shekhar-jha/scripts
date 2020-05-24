@@ -49,7 +49,7 @@
 31. Disable Hibernation(run cmd as administrator)
     powercfg.exe –h off
     bcdedit /timeout 5
-32. cleanmgr.exe,
+32. cleanmgr.exe, cleanmgr /sageset:1
 33. wevtutil el | Foreach-Object {wevtutil cl "$_"}
 34. Control Panel->System->Advanced System Properties->performance->Advance->Virtual Memory->Change
     Uncheck “Automatically manage paging file size for all drives”
@@ -63,3 +63,5 @@
     d. login to ESX server and run the command to thin and reduce size of the file.
        vmkfstools -K <file name>.vmdk
 37. Start machine Enable paging files and shutdown
+38. Change Disk to client and change network to generic location
+39. Create template
