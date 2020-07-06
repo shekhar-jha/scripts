@@ -12,13 +12,13 @@ The following code invokes script on machine to configure WinRM service for powe
 
 ```
 Connect-VIServer '<ip address vmx console>'
-$VMName = '<name of VM on VMWare>'
 $LocalIPAddress = '<IP address of client machine>'
 $GuestCredential = Get-Credential
+$VMName = '<name of VM on VMWare>'
 $VM = Get-VM -name $VMName
 Invoke-VMScript -vm $VM -GuestCredential $GuestCredential -ScriptText "Enable-PSRemoting -Force;Set-Item WSMan:\localhost\Client\TrustedHosts -Concatenate -Value '$LocalIPAddress' -Force;Get-Item WSMan:\localhost\Client\TrustedHosts;winrm quickconfig -quiet;Restart-Service WinRM;" -ScriptType PowerShell
 Start-Process powershell -Verb runAs -ArgumentList "& '-Item -Concatenate -Value $VM.Guest.IPAddress'"
-Enter-PSSession -ComputerName $VM.Guest.IPAddress -Credential $Credential
+Enter-PSSession -ComputerName "$($VM.Guest.IPAddress)" -Credential $GuestCredential
 ```
 
 # Guest Windows Template
