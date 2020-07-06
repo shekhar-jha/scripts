@@ -1,3 +1,27 @@
+# VMWare Scriptlets
+
+## Install module
+
+```
+Install-Module VMWare.PowerCLI -Scope CurrentUser
+```
+
+## VMWare Tools: Invoke scripts
+
+The following code invokes script on machine to configure WinRM service for powershell remoting. This allows execution of various Windows Server operations remotely.
+
+```
+Connect-VIServer '<ip address vmx console>'
+$VMName = '<name of VM on VMWare>'
+$LocalIPAddress = '<IP address of client machine>'
+$GuestCredential = Get-Credential
+$VM = Get-VM -name $VMName
+Invoke-VMScript -vm $VM -GuestCredential $GuestCredential -ScriptText "Enable-PSRemoting -Force;Set-Item WSMan:\localhost\Client\TrustedHosts -Concatenate -Value '$LocalIPAddress' -Force;Get-Item WSMan:\localhost\Client\TrustedHosts;winrm quickconfig -quiet;Restart-Service WinRM;" -ScriptType PowerShell
+Start-Process powershell -Verb runAs -ArgumentList "& '-Item -Concatenate -Value $VM.Guest.IPAddress'"
+Enter-PSSession -ComputerName $VM.Guest.IPAddress -Credential $Credential
+```
+
+# Guest Windows Template
 
 1. Disable Serial, Parallel Ports and Floppy controller in Bios
 2. Install/Update VMWare Tools
