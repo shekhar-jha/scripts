@@ -14,11 +14,29 @@ The following code invokes script on machine to configure WinRM service for powe
 Connect-VIServer '<ip address vmx console>'
 $LocalIPAddress = '<IP address of client machine>'
 $GuestCredential = Get-Credential
-$VMName = '<name of VM on VMWare>'
-$VM = Get-VM -name $VMName
-Invoke-VMScript -vm $VM -GuestCredential $GuestCredential -ScriptText "Enable-PSRemoting -Force;Set-Item WSMan:\localhost\Client\TrustedHosts -Concatenate -Value '$LocalIPAddress' -Force;Get-Item WSMan:\localhost\Client\TrustedHosts;winrm quickconfig -quiet;Restart-Service WinRM;" -ScriptType PowerShell
-Start-Process powershell -Verb runAs -ArgumentList "& '-Item -Concatenate -Value $VM.Guest.IPAddress'"
-Enter-PSSession -ComputerName "$($VM.Guest.IPAddress)" -Credential $GuestCredential
+$VMNames = '<name of VM on VMWare>','<name of VM on VMWare';
+foreach ($VMName in $VMNames)
+{
+    $VM = Get-VM -name $VMName;
+    Invoke-VMScript -vm $VM -GuestCredential $GuestCredential -ScriptText "Enable-PSRemoting -Force;Set-Item WSMan:\localhost\Client\TrustedHosts -Concatenate -Value '$LocalIPAddress' -Force;Get-Item WSMan:\localhost\Client\TrustedHosts;winrm quickconfig -quiet;Restart-Service WinRM;" -ScriptType PowerShell
+    Start-Process powershell -Verb runAs -ArgumentList "& '-Item -Concatenate -Value $VM.Guest.IPAddress'"
+    Enter-PSSession -ComputerName "$($VM.Guest.IPAddress)" -Credential $GuestCredential
+}
+```
+## Revert Snapshot
+
+```
+$VMNames = '<name of VM on VMWare>','<name of VM on VMWare';
+$SnapshotName = 'Base Install';
+foreach ($VMName in $VMNames)
+{
+    $VM = Get-VM -name $VMName; 
+    $shutdownStatus = Shutdown-VMGuest -VM $VM -Confirm:$false;
+    Do { Start-Sleep -Seconds 5; $currentVMState =Get-VM $vmName; $status = $currentVMState.PowerState } Until ( $status -eq "PoweredOff"); 
+    $Snap = Get-Snapshot -VM $VM -Name "$SnapshotName"; 
+    $revertStatus = Set-VM -VM $VM -Snapshot $Snap -Confirm:$false;
+    $startStatus = Start-VM -VM $VM
+}
 ```
 
 # Guest Windows Template
