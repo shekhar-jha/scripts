@@ -2,7 +2,7 @@
 
 ## Install module
 
-```
+```powershell
 Install-Module VMWare.PowerCLI -Scope CurrentUser
 ```
 
@@ -10,7 +10,7 @@ Install-Module VMWare.PowerCLI -Scope CurrentUser
 
 The following code invokes script on machine to configure WinRM service for powershell remoting. This allows execution of various Windows Server operations remotely.
 
-```
+```powershell
 Connect-VIServer '<ip address vmx console>'
 $LocalIPAddress = '<IP address of client machine>'
 $GuestCredential = Get-Credential
@@ -23,9 +23,13 @@ foreach ($VMName in $VMNames)
     Enter-PSSession -ComputerName "$($VM.Guest.IPAddress)" -Credential $GuestCredential
 }
 ```
+## Change Account details
+```powershell
+ $VM = Get-VM -name "Test Windows Server 4"; Invoke-VMScript -vm $VM -GuestCredential $GuestCredential -ScriptType PowerShell -ScriptText 'Set-LocalUser -Name "Administrator" -AccountNeverExpires:$true -PasswordNeverExpires:$true'
+```
 ## Revert Snapshot
 
-```
+```powershell
 $VMNames = '<name of VM on VMWare>','<name of VM on VMWare';
 $SnapshotName = 'Base Install';
 foreach ($VMName in $VMNames)
