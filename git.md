@@ -55,3 +55,17 @@ $ /usr/local/bin/git --version
 ```console
 $ /usr/local/bin/git clone https://example.com/project1/project1.git
 ```
+
+# Command Tricks
+
+## Commitment history for remote branch
+
+```
+git for-each-ref --format='%(committerdate) %09 %(authorname) %09 %(refname)' | sort
+```
+
+## Prune dead/deleted remote branches
+```
+git remote update origin --prune
+```
+
