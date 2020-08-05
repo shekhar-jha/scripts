@@ -69,3 +69,49 @@ git for-each-ref --format='%(committerdate) %09 %(authorname) %09 %(refname)' | 
 git remote update origin --prune
 ```
 
+## Resolve conflicts
+There are multiple scenarios in which conflict can happen. This section provides some of the approaches that should be used.
+### Parent branch updated
+```
+original_branch: A – B  – F  
+                      \
+new_branch:            C – D – E <-- rebase
+```
+In case the original branch has been updated after the initial branch, depending on the changes, conflict may arise in case of rebase before merging to original branch. In such a scenario the following steps can be followed.
+
+1. Start the rebase by specifying the original branch `git checkout new_branch; git rebase original_branch`. This should display all the files that is resulting in conflict
+    ```
+    git rebase dev
+     First, rewinding head to replay your work on top of it...
+     Applying: Commit comment
+     .git/rebase-apply/patch:134: trailing whitespace.
+
+     warning: 1 line adds whitespace errors.
+     error: Failed to merge in the changes. 
+     Using index info to reconstruct a base tree...
+     M       folder1/folder2/file1.txt              <----------------------------
+     Falling back to patching base and 3-way merge...
+     Auto-merging folder1/folder2/file1.txt
+     CONFLICT (content): Merge conflict in folder1/folder2/file1.txt
+     Patch failed at 0001 Commit comment.
+     The copy of the patch that failed is found in: .git/rebase-apply/patch
+
+     Resolve all conflicts manually, mark them as resolved with
+     "git add/rm <conflicted_files>", then run "git rebase --continue".
+     You can instead skip this commit: run "git rebase --skip".
+     To abort and get back to the state before "git rebase", run "git rebase --abort".
+    ```
+2. Run through the following steps for each of the file identified with conflict
+     1. Fix the conflict i.e. find the area in file that has `<<<<<<<` and `>>>>>>>` and fix the content between the two and remove all the line that contain added content like `<<<<<<<`,  `>>>>>>>` & `=======`.
+     2. Add the updated file explicitly using `git add <conflict file>` to ensure that git understands you have fixed conflict
+3. Run `git rebase --continue` to continue the rebasing process. In case additional conflicts are flagged, execute step 2 to fix the changes
+4. At this time pull the branch and identify the conflict files.
+    ```
+    $ git pull
+      Auto-merging folder1/folder2/file1.txt
+      CONFLICT (content): Merge conflict in folder1/folder2/file1.txt
+      Automatic merge failed; fix conflicts and then commit the result.
+    ```
+5. Fix the conflicts identified and run `git add <conflict file>`
+6. Commit the changes `git commit -m 'comment'` and push the update `git push`
+
