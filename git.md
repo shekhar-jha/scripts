@@ -89,10 +89,10 @@ In case the original branch has been updated after the initial branch, depending
      warning: 1 line adds whitespace errors.
      error: Failed to merge in the changes. 
      Using index info to reconstruct a base tree...
-     M       folder1/folder2/file1.txt              <----------------------------
+     M       folder1/folder2/file1.txt              
      Falling back to patching base and 3-way merge...
      Auto-merging folder1/folder2/file1.txt
-     CONFLICT (content): Merge conflict in folder1/folder2/file1.txt
+     CONFLICT (content): Merge conflict in folder1/folder2/file1.txt <----------------------------
      Patch failed at 0001 Commit comment.
      The copy of the patch that failed is found in: .git/rebase-apply/patch
 
