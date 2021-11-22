@@ -115,3 +115,13 @@ In case the original branch has been updated after the initial branch, depending
 5. Fix the conflicts identified and run `git add <conflict file>`
 6. Commit the changes `git commit -m 'comment'` and push the update `git push`
 
+# Very Large Repo
+
+## Initial clone
+
+```
+git clone git@github.com:MicrosoftDocs/azure-docs.git --branch master --single-branch --depth 1
+```
+
+## Fetch/update
+TODO
