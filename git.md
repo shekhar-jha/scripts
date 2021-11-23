@@ -124,4 +124,9 @@ git clone git@github.com:MicrosoftDocs/azure-docs.git --branch master --single-b
 ```
 
 ## Fetch/update
-TODO
+
+Use the date which is 1 day before last update (can be figured out by using `git log HEAD origin/master` to identify when )
+```
+git fetch --shallow-since="2021-11-21"
+git merge
+```
