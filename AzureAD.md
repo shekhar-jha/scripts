@@ -1,6 +1,6 @@
 Different modules sometimes with overlapping capabilities are available from Microsoft for managing Azure capabilities. This tries to collect some of these scenarios for reference.
 
-# Install
+# Install Modules
 
 ## Az
 
@@ -21,10 +21,11 @@ Provides wrapper over MS Graph API. MSOnline is an older version using V1 Graph 
 
 ```
 Install-Module AzureAD
-Install-module AzureADPreview
+Install-Module MSOnline
 ```
 **OR**
 ```
+Install-Module AzureADPreview
 Install-Module MSOnline
 ```
 
@@ -33,10 +34,26 @@ Install-Module MSOnline
 Wrapper over graph API. Run the second line below to select beta profile.
 
 ```
+Install-Module Microsoft.Graph
 Install-module Microsoft.Graph.Identity.Signins
 Select-MgProfile -Name beta
 ```
 
+## M365 Components
+
+```
+Install-Module -Name ExchangeOnlineManagement
+Install-Module -Name Microsoft.Online.SharePoint.PowerShell
+Install-Module -Name MicrosoftTeams
+```
+
+# Pre-req 
+
+Before running any command, you may have to execute the following command
+
+```
+Set-ExecutionPolicy RemoteSigned
+```
 
 # Connect
 
@@ -91,8 +108,15 @@ $user=Get-MgUser -All
 $users | forEach-Object {$_|select Id, MobilePhone}| ConvertTo-Csv
 ```
 
-# Powershell uninstall
+# Powershell Module management
 
+## Updates
+
+```
+Update-Module
+```
+
+## Uninstall
 Powershell modules uninstallation must be done one module at a time. Use following scipt for cleanups
 
 ```
