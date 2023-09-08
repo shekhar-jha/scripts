@@ -1,3 +1,9 @@
+This covers tips and tricks across git & github repository.
+
+# Git
+
+## Authentication
+git needs to authenticate with enterprise and external repos. This section covers some of those tips and tricks.
 
 ## Credential manager
 
@@ -18,7 +24,7 @@ https://<github server>/path/to/project.git
 In some cases, git repository may be setup such that it either requires mutually authenticated SSL or supports mutually authenticated SSL as first step and if that fails switches to SAML/OpenID Connect/OAuth authentication (this allows support for both SSO for web and mutual auth SSL for command line tools).
 In such scenario, it is important for the tools to support mutually authenticated SSL. The client certificate for mutually authenticated SSL may exist as a file or in a corporate world may be stored in appropriate repository on device (Mac - Keychain, Windows - Cert store).
 
-## Windows
+### Windows
 
 On windows, this is achieved by using Windows SSL libraries (typically an option while installing the **Git for Windows** client version 2.14 and later). You can confirm whether the git is using the correct SSL libraries by executing the following command
 
@@ -32,11 +38,11 @@ git config --global http.sslBackend schannel
 ```
 **Note** : The `--global` will change setting for all the git repositories on the machine. If you want to limit change to your repository, try using `--local`.
 
-## Mac
+### Mac
 
 git on Mac supports certificate files for authentication. But there is no official support for keychain. In worst case scenario, you can use a specific version of git (from brew) that integrates with curl that can integrate with Keychain and use the certificate stored in keychain.
 
-### Setup
+#### Setup
 
 1. Install curl
 ```console
@@ -56,22 +62,23 @@ $ /usr/local/bin/git --version
 $ /usr/local/bin/git clone https://example.com/project1/project1.git
 ```
 
-# Command Tricks
+## Command Tricks
+Tips and tricks to manage your git repository
 
-## Commitment history for remote branch
+### Commitment history for remote branch
 
 ```
 git for-each-ref --format='%(committerdate) %09 %(authorname) %09 %(refname)' | sort
 ```
 
-## Prune dead/deleted remote branches
+### Prune dead/deleted remote branches
 ```
 git remote update origin --prune
 ```
 
-## Resolve conflicts
+### Resolve conflicts
 There are multiple scenarios in which conflict can happen. This section provides some of the approaches that should be used.
-### Parent branch updated
+#### Parent branch updated
 ```
 original_branch: A – B  – F  
                       \
@@ -115,18 +122,54 @@ In case the original branch has been updated after the initial branch, depending
 5. Fix the conflicts identified and run `git add <conflict file>`
 6. Commit the changes `git commit -m 'comment'` and push the update `git push`
 
-# Very Large Repo
+## Very Large Repo
 
-## Initial clone
+### Initial clone
 
 ```
 git clone git@github.com:MicrosoftDocs/azure-docs.git --branch master --single-branch --depth 1
 ```
 
-## Fetch/update
+### Fetch/update
 
 Use the date which is 1 day before last update (can be figured out by using `git log HEAD origin/master` to identify when )
 ```
 git fetch --shallow-since="2021-11-21"
 git merge
 ```
+
+# Github
+Tips and tricks for github repo. Most of the following can be run for enterprise repo by setting `GH_HOST=<domain e.g. github.xyz.com>` environment variables
+
+## Sync forked repo
+Github allows user to fork repos but once forked, it is responsibility of the fork owner to keep it synced with upstream repo. Not being diligent can result in merging issues later due to significant fallback in forked repo state. This scripts identifies all the forked repos of the user and syncs them with upstream system using `gh` CLI
+
+```shell
+# Run the following line if you want to work on Github enterprise
+# export GH_HOST=github.xxx.yyy.com
+
+updateRepos() {
+  echo "Checking login..."
+  gh auth status
+  alreadyLogin=$?
+  if [[ "${alreadyLogin}" -eq "1" ]]; then
+    echo "Please complete login using 'gh auth login' before running the script again"
+    exit 1
+  fi
+  listOfRepos=$(gh repo list --fork --json owner,name | jq -r '.[]|.owner.login+"/"+.name')
+  repos=("${(f)listOfRepos}")
+  for aRepo in $repos
+  do
+    echo "Processing repo $aRepo"
+    listOfbranches=$(gh api "repos/$aRepo/branches" | jq -r ".[]|.name")
+    branches=("${(f)listOfbranches}")
+    for aBranch in $branches
+    do
+      echo "Processing repo $aRepo and branch $aBranch"
+      gh repo sync "${aRepo}" -b "${aBranch}"
+    done
+  done
+}
+```
+
+
