@@ -137,7 +137,39 @@ Use the date which is 1 day before last update (can be figured out by using `git
 git fetch --shallow-since="2021-11-21"
 git merge
 ```
-
+## Bulk updates
+Git updates on a daily basis can ensure that all the changes being made are against the latest version of the code. Keeping that in mind, this script runs pull on ALL the git repos at the given location. This script is written for zsh and may need change to run in bash or other shell.
+```zsh
+export DEFAULT_GIT_REPO_LOCATIONS=('/Users/jhash/Projects')
+updateGit() {
+  local repoLocations=($@)
+  if [[ ${#repoLocations} -eq 0 ]]; then
+    repoLocations=(${DEFAULT_GIT_REPO_LOCATIONS})
+  fi
+  local repoLocation
+  local gitDirs
+  local gitDir
+  local gitErr
+  for repoLocation in $repoLocations;
+  do
+  	echo "Processing location ${repoLocation}"
+  	gitDirs=("${(@f)$(find ${repoLocation} -name '.git' -exec dirname {} \; )}")
+  	for gitDir in $gitDirs
+  	do
+  	  echo "**************     Updating ${gitDir}     **************"
+  	  gitout=$(git -C "${gitDir}" pull)
+  	  gitErr=$?
+  	  if [[ $gitErr -ne 0 ]]; then
+  	    echo "${gitout}"
+  	    echo "XXXXXXXXXXXXXX     Updating ${gitDir}     XXXXXXXXXXXXXX"
+  	  else
+  	  	echo "**************     Updated  ${gitDir}     **************"
+  	  fi
+  	done
+  done
+  echo "Updated repos"
+}
+```
 # Github
 Tips and tricks for github repo. Most of the following can be run for enterprise repo by setting `GH_HOST=<domain e.g. github.xyz.com>` environment variables
 
