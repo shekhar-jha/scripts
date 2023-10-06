@@ -5,6 +5,8 @@ Simple scripts for various SSL operations using OpenSSL and Java keystores
 ## CSR Generation
 
 ```
+OPENSSL_CMD="/usr/local/bin/openssl"
+SCRIPT_DIR=$(dirname `cd -P -- "$(dirname -- "$0")" && printf '%s\n' "$(pwd -P)/$(basename -- "$0")"`)
 if [ $# -eq 0 ]
 then
    echo "Please provide fully qualified server name"
@@ -32,22 +34,79 @@ fi
 processHostName=${splitValues[0]}
 mkdir -p $processHostName
 cd $processHostName
-openssl genrsa -out ./$processHostName.key 2048
-openssl req -new -key ./$processHostName.key -out ./$processHostName.csr -subj "/C=IN/ST=MH/L=WHATEVER/O=ACMEINC/CN=$1"
+$OPENSSL_CMD genrsa -out ./$processHostName.key 2048
+$OPENSSL_CMD req -new -key ./$processHostName.key -out ./$processHostName.csr -subj "/C=IN/ST=MH/L=WHATEVER/O=ACMEINC/CN=$1"
 ```
 ## Generate and sign certificates
 
-### Create CA
+Create a directory and copy all the files below
 ```
-OPENSSL_CMD="/usr/local/Cellar/openssl/1.0.2t/bin/openssl"
-mkdir -p ca
-openssl genrsa -out ca/ca.key 2048
-$OPENSSL_CMD req -new -x509 -key ca/ca.key -sha256 -days 328500 -out ca/ca.crt -config ./certs-v3-ca.conf
+# cd $CA_ROOT_DIR
+mkdir bin
+cd bin
 ```
 
-### Create Cert
+#### ca.sh
+
+```
+OPENSSL_CMD="/usr/local/bin/openssl"
+SCRIPT_DIR=$(dirname `cd -P -- "$(dirname -- "$0")" && printf '%s\n' "$(pwd -P)/$(basename -- "$0")"`)
+mkdir -p ca
+$OPENSSL_CMD genrsa -out ca/ca.key 2048
+$OPENSSL_CMD req -new -x509 -key ca/ca.key -sha256 -days 328500 -out ca/ca.crt -config "${SCRIPT_DIR}/certs-v3-ca.conf"
+```
+
+#### certs-v3-ca.conf
+
+```
+# OpenSSL CA configuration file
+[ ca ]
+default_ca = CA_default
+
+[ CA_default ]
+default_days = 365
+database = index.txt
+serial = serial.txt
+default_md = sha256
+copy_extensions = copy
+unique_subject = no
+
+# Used to create the CA certificate.
+[ req ]
+prompt=no
+distinguished_name = distinguished_name
+x509_extensions = extensions
+
+[ distinguished_name ]
+organizationName = AGreatOrg
+commonName = GreatOrg US
+
+[ extensions ]
+keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign
+basicConstraints = critical,CA:true,pathlen:1
+
+# Common policy for nodes and users.
+[ signing_policy ]
+organizationName = supplied
+commonName = optional
+
+# Used to sign node certificates.
+[ signing_node_req ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth,clientAuth
+
+# Used to sign client certificates.
+[ signing_client_req ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+```
+
+#### create.sh
+
 ```
 #!/bin/bash
+OPENSSL_CMD="/usr/local/bin/openssl"
+SCRIPT_DIR=$(dirname `cd -P -- "$(dirname -- "$0")" && printf '%s\n' "$(pwd -P)/$(basename -- "$0")"`)
 
 usage () {
   echo $0' <directory name> <domain name> [<domain name>]*'
@@ -80,23 +139,23 @@ do
 done
 echo "SAN List: $SAN"
 
-OPENSSL_CMD="/mingw64/bin/openssl"
+$OPENSSL_CMD genrsa -out $CERT_DIR/items/$DOMAIN_NAME.key 2048;
+cp "${SCRIPT_DIR}"/certs-v3.conf ./certs-v3.conf.temp
+echo "$SAN" >> ./certs-v3.conf.temp
 
-    $OPENSSL_CMD genrsa -out $CERT_DIR/items/$DOMAIN_NAME.key 2048;
-    cp ./certs-v3.conf ./certs-v3.conf.temp
-    echo "$SAN" >> ./certs-v3.conf.temp
-
-    $OPENSSL_CMD req -new -key $CERT_DIR/items/$DOMAIN_NAME.key -out $CERT_DIR/items/$DOMAIN_NAME.csr \
-        -subj "//C=US\ST=MH\L=WHATEVER\O=ACMEINC\OU=IT\CN=$DOMAIN_NAME" \
+$OPENSSL_CMD req -new -key $CERT_DIR/items/$DOMAIN_NAME.key -out $CERT_DIR/items/$DOMAIN_NAME.csr \
+        -subj "/C=US/CN=$DOMAIN_NAME" \
         -reqexts v3_req \
         -extensions v3_req -config ./certs-v3.conf.temp
 
-    $OPENSSL_CMD x509 -req -in $CERT_DIR/items/$DOMAIN_NAME.csr -CA ./ca/ca.crt -CAkey ./ca/ca.key -CAcreateserial -out $CERT_DIR/items/$DOMAIN_NAME.crt -days 328499 -sha256 -extensions v3_req -extfile ./certs-v3.conf.temp;
-    rm ./certs-v3.conf.temp
-    $OPENSSL_CMD pkcs12 -export -out $CERT_DIR/$DOMAIN_NAME.pfx -inkey $CERT_DIR/items/$DOMAIN_NAME.key -in $CERT_DIR/items/$DOMAIN_NAME.crt -certfile ./ca/ca.crt;
+$OPENSSL_CMD x509 -req -in $CERT_DIR/items/$DOMAIN_NAME.csr -CA ./ca/ca.crt -CAkey ./ca/ca.key -CAcreateserial -out $CERT_DIR/items/$DOMAIN_NAME.crt -days 328499 -sha256 -extensions v3_req -extfile ./certs-v3.conf.temp;
+rm ./certs-v3.conf.temp
+$OPENSSL_CMD pkcs12 -export -out $CERT_DIR/$DOMAIN_NAME.pfx -inkey $CERT_DIR/items/$DOMAIN_NAME.key -in $CERT_DIR/items/$DOMAIN_NAME.crt -certfile ./ca/ca.crt;
 ```
+
 #### certs-v3.conf
 The file should contain the following 
+
 ```
 [ v3_req ] # this section should contain the following
 # Extensions to add to a certificate request
@@ -111,6 +170,14 @@ subjectAltName = @alt_names
 [alt_names]
 # This should be last line in file
 
+```
+
+After all the files have been created, create a new certificate as 
+```
+./bin/ca.sh
+mkdir mycerts
+./bin/create.sh mycerts 'www.test.com' '*.test.com'
+chmod +r mycerts/items/www.test.com.key
 ```
 
 ## Create PKCS12 file and JKS File
